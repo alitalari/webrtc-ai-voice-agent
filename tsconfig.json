@@ -4,6 +4,7 @@
   "references": [
     { "path": "packages/protocol" },
     { "path": "packages/provider-interfaces" },
+    { "path": "packages/session" },
     { "path": "packages/web-sdk" },
     { "path": "apps/server" },
     { "path": "apps/web-demo" },
