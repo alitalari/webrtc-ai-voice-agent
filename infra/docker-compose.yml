@@ -1,0 +1,23 @@
+# Phase 0 skeleton. Brings up the reference backend + coturn for local testing.
+# Fleshed out in Phase 5 (hosted demo).
+services:
+  server:
+    build:
+      context: ..
+      dockerfile: apps/server/Dockerfile # added in Phase 5
+    environment:
+      - NODE_ENV=development
+      # Provider keys are injected here, server-side only — never in the client.
+      # - DEEPGRAM_API_KEY=
+      # - CARTESIA_API_KEY=
+      # - ANTHROPIC_API_KEY=
+    ports:
+      - '8080:8080'
+    profiles: ['phase5'] # not buildable until the Dockerfile exists
+
+  coturn:
+    image: coturn/coturn:latest
+    network_mode: host
+    volumes:
+      - ./coturn/turnserver.conf:/etc/coturn/turnserver.conf:ro
+    profiles: ['phase5']

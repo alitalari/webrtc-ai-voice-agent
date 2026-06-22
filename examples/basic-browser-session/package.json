@@ -1,0 +1,12 @@
+{
+  "name": "@voice/example-basic-browser-session",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@voice/web-sdk": "*"
+  }
+}
