@@ -14,13 +14,13 @@
   <body>
     <h1>WebRTC media-path test</h1>
     <p>
-      Milestone 1: connect over WebRTC, hear your mic echoed back, and round-trip
-      control events on the data channel. Turn-taking is driven by simulated VAD
+      Milestone 1: <strong>Connect</strong> opens the WebRTC transport and starts the
+      voice session in one step — you should hear your mic echoed back and see a
+      <code>session.started</code> event. Turn-taking is driven by simulated VAD
       (real VAD + TTS audio arrive with the Opus codec).
     </p>
     <p>
       <button id="connect">Connect</button>
-      <button id="start" disabled>Start session</button>
       <button id="turn" disabled>Simulate a turn</button>
       <button id="interrupt" disabled>Interrupt</button>
     </p>

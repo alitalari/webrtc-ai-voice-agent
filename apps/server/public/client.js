@@ -10,29 +10,45 @@ const log = (msg) => {
 let pc;
 let control;
 let sessionId;
+let localStream;
+
+const sendEvent = (payload) => control.send(JSON.stringify({ kind: 'event', payload }));
+const sendVad = (speech, timestampMs) =>
+  control.send(JSON.stringify({ kind: 'vad', payload: { speech, timestampMs } }));
+
+function setConnectedUi(on) {
+  $('connect').textContent = on ? 'Disconnect' : 'Connect';
+  $('connect').disabled = false;
+  $('turn').disabled = !on;
+  $('interrupt').disabled = !on;
+}
 
 async function connect() {
   $('conn').textContent = 'connecting…';
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  $('connect').disabled = true;
 
+  localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
   pc = new RTCPeerConnection();
-  for (const track of stream.getAudioTracks()) pc.addTrack(track, stream);
+  for (const track of localStream.getAudioTracks()) pc.addTrack(track, localStream);
 
   pc.ontrack = (e) => {
     $('remote').srcObject = e.streams[0];
-    log('▶ remote audio track attached (you should hear yourself echoed)');
+    log('▶ remote audio attached (you should hear yourself echoed)');
   };
   pc.onconnectionstatechange = () => {
     $('conn').textContent = pc.connectionState;
     log('connection: ' + pc.connectionState);
+    if (pc.connectionState === 'failed' || pc.connectionState === 'closed') disconnect();
   };
 
   control = pc.createDataChannel('control');
   control.onopen = () => {
     log('control channel open');
-    $('start').disabled = false;
-    $('turn').disabled = false;
-    $('interrupt').disabled = false;
+    // Begin the voice-session lifecycle on top of the transport (what the old
+    // "Start session" button did) — one step now.
+    sendEvent({ type: 'session.start', sessionId });
+    log('➡ session.start');
+    setConnectedUi(true);
   };
   control.onmessage = (e) => {
     const msg = JSON.parse(e.data);
@@ -54,24 +70,39 @@ async function connect() {
   log('answer applied; session ' + sessionId);
 }
 
-function waitIceComplete(pc) {
+function disconnect() {
+  if (control) control.close();
+  if (pc) pc.close();
+  if (localStream) for (const t of localStream.getTracks()) t.stop();
+  pc = undefined;
+  control = undefined;
+  localStream = undefined;
+  $('remote').srcObject = null;
+  $('conn').textContent = 'idle';
+  log('disconnected');
+  setConnectedUi(false);
+}
+
+function waitIceComplete(peer) {
   return new Promise((resolve) => {
-    if (pc.iceGatheringState === 'complete') return resolve();
-    pc.addEventListener('icegatheringstatechange', () => {
-      if (pc.iceGatheringState === 'complete') resolve();
+    if (peer.iceGatheringState === 'complete') return resolve();
+    peer.addEventListener('icegatheringstatechange', () => {
+      if (peer.iceGatheringState === 'complete') resolve();
     });
   });
 }
 
-const sendEvent = (payload) => control.send(JSON.stringify({ kind: 'event', payload }));
-const sendVad = (speech, timestampMs) =>
-  control.send(JSON.stringify({ kind: 'vad', payload: { speech, timestampMs } }));
-
-$('connect').onclick = () => connect().catch((e) => log('error: ' + e.message));
-$('start').onclick = () => {
-  sendEvent({ type: 'session.start', sessionId });
-  log('➡ session.start');
+$('connect').onclick = () => {
+  if (pc) {
+    disconnect();
+    return;
+  }
+  connect().catch((e) => {
+    log('error: ' + e.message);
+    disconnect();
+  });
 };
+
 $('interrupt').onclick = () => {
   sendEvent({ type: 'agent.interrupt', sessionId, reason: 'manual' });
   log('➡ agent.interrupt');
