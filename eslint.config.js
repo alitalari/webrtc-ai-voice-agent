@@ -13,4 +13,17 @@ export default tseslint.config(
       ],
     },
   },
+  {
+    // Browser-side harness scripts served as static files.
+    files: ['**/public/**/*.js'],
+    languageOptions: {
+      globals: {
+        window: 'readonly',
+        document: 'readonly',
+        navigator: 'readonly',
+        fetch: 'readonly',
+        RTCPeerConnection: 'readonly',
+      },
+    },
+  },
 );

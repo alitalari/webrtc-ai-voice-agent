@@ -9,7 +9,11 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
+    "@voice/fake-providers": "*",
+    "@voice/orchestrator": "*",
     "@voice/protocol": "*",
-    "@voice/provider-interfaces": "*"
+    "@voice/provider-interfaces": "*",
+    "@voice/session": "*",
+    "werift": "^0.23.0"
   }
 }

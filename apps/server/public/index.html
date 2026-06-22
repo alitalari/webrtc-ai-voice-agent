@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Voice SDK — WebRTC media-path test</title>
+    <style>
+      body { font: 14px system-ui, sans-serif; margin: 2rem; max-width: 760px; }
+      button { font: inherit; padding: 0.4rem 0.8rem; margin-right: 0.4rem; }
+      #log { white-space: pre-wrap; background: #111; color: #0f0; padding: 1rem; border-radius: 6px; height: 320px; overflow: auto; }
+      .state { font-weight: bold; }
+    </style>
+  </head>
+  <body>
+    <h1>WebRTC media-path test</h1>
+    <p>
+      Milestone 1: connect over WebRTC, hear your mic echoed back, and round-trip
+      control events on the data channel. Turn-taking is driven by simulated VAD
+      (real VAD + TTS audio arrive with the Opus codec).
+    </p>
+    <p>
+      <button id="connect">Connect</button>
+      <button id="start" disabled>Start session</button>
+      <button id="turn" disabled>Simulate a turn</button>
+      <button id="interrupt" disabled>Interrupt</button>
+    </p>
+    <p>Connection: <span id="conn" class="state">idle</span></p>
+    <audio id="remote" autoplay></audio>
+    <div id="log"></div>
+    <script src="/client.js"></script>
+  </body>
+</html>

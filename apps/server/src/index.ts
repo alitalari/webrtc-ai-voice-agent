@@ -1,16 +1,9 @@
-import { PROTOCOL_VERSION } from '@voice/protocol';
+import { startDevServer } from './dev-server.js';
 
 /**
- * Reference backend entry point.
- *
- * Phase 0 scaffold only. This process will host two internal services:
- *   - control plane: signaling, auth/session tokens, orchestration, metrics
- *   - media engine:  isolated WebRTC endpoint (Opus, VAD, framing)
+ * Reference backend entry point. Milestone 1 of the real WebRTC media path:
+ * signaling + a werift peer that echoes audio and carries control events.
  * See docs/architecture.md → Stack & Runtime Decision.
  */
-function main(): void {
-  // Structured logging convention lands in Phase 4 (docs/observability.md).
-  console.log(`@voice/server scaffold — protocol v${PROTOCOL_VERSION}`);
-}
-
-main();
+const port = Number(process.env.PORT ?? 8080);
+startDevServer(port);
