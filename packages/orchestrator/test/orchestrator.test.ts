@@ -53,6 +53,44 @@ describe('SessionOrchestrator — happy path', () => {
   });
 });
 
+describe('SessionOrchestrator — latency metrics', () => {
+  it('emits metrics.latency on first audio with budget-relevant deltas', async () => {
+    // Injected clock returns 10, 20, 30 on successive calls: final transcript at
+    // t=10, endpoint at t=20, first audio at t=30. So final→audio = 20, end-to-end
+    // (endpoint→audio) = 10. Deterministic, no real time.
+    let t = 0;
+    const now = () => (t += 10);
+
+    const asr = new FakeASRAdapter();
+    const events: ServerEvent[] = [];
+    const orch = new SessionOrchestrator({
+      sessionId: 's1',
+      adapters: {
+        asr,
+        model: new FakeModelAdapter({ script: ['Hi'] }),
+        tts: new FakeTTSAdapter({ chunkCount: 1 }),
+      },
+      endpointer: { silenceThresholdMs: 100 },
+      onEvent: (e) => events.push(e),
+      onAudio: () => {},
+      now,
+    });
+
+    await orch.start();
+    orch.pushVad({ speech: true, timestampMs: 0 });
+    asr.emitFinal('hello'); // now() #1 → 10
+    for (let ts = 20; ts <= 140; ts += 20) orch.pushVad({ speech: false, timestampMs: ts }); // endpoint → now() #2 → 20
+    await orch.whenResponseSettled(); // first audio → now() #3 → 30
+
+    const metric = events.find((e) => e.type === 'metrics.latency');
+    expect(metric).toBeDefined();
+    if (metric?.type === 'metrics.latency') {
+      expect(metric.metrics.timeToFirstAudioByteMs).toBe(20);
+      expect(metric.metrics.endToEndTurnMs).toBe(10);
+    }
+  });
+});
+
 describe('SessionOrchestrator — barge-in cancellation contract', () => {
   it('user speech during thinking cancels the response and listens to the user', async () => {
     const gate = makeGate();

@@ -30,6 +30,8 @@ export interface OrchestratorOptions {
   onEvent: (event: ServerEvent) => void;
   /** Sink for synthesized audio chunks bound for the client. */
   onAudio: (chunk: AudioChunk) => void;
+  /** Monotonic clock in ms. Injected for deterministic tests; defaults to Date.now. */
+  now?: () => number;
 }
 
 /**
@@ -47,9 +49,11 @@ export class SessionOrchestrator {
   private readonly machine = new SessionMachine();
   private readonly onEvent: (event: ServerEvent) => void;
   private readonly onAudio: (chunk: AudioChunk) => void;
+  private readonly now: () => number;
 
   private readonly history: ModelMessage[] = [];
   private lastFinal = '';
+  private lastFinalAtMs = 0;
   private lastPartial = '';
   private responseGeneration = 0;
   private responseTask: Promise<void> = Promise.resolve();
@@ -61,6 +65,7 @@ export class SessionOrchestrator {
     this.endpointer = new Endpointer(options.endpointer);
     this.onEvent = options.onEvent;
     this.onAudio = options.onAudio;
+    this.now = options.now ?? (() => Date.now());
 
     this.adapters.asr.onPartialTranscript((text) => {
       this.lastPartial = text;
@@ -68,6 +73,7 @@ export class SessionOrchestrator {
     });
     this.adapters.asr.onFinalTranscript((text) => {
       this.lastFinal = text;
+      this.lastFinalAtMs = this.now();
       this.emit({ type: 'transcript.final', sessionId: this.sessionId, text });
     });
   }
@@ -146,6 +152,7 @@ export class SessionOrchestrator {
 
   private beginResponse(): void {
     const gen = ++this.responseGeneration;
+    const endpointAtMs = this.now(); // end-of-turn decision time
     const userText = this.lastFinal || this.lastPartial;
     this.history.push({ role: 'user', content: userText });
 
@@ -169,6 +176,15 @@ export class SessionOrchestrator {
           started = true;
           this.apply({ type: 'agentResponseStarted' }); // thinking → speaking
           this.emit({ type: 'agent.response.started', sessionId: this.sessionId });
+          const firstAudioAtMs = this.now();
+          this.emit({
+            type: 'metrics.latency',
+            sessionId: this.sessionId,
+            metrics: {
+              timeToFirstAudioByteMs: firstAudioAtMs - this.lastFinalAtMs,
+              endToEndTurnMs: firstAudioAtMs - endpointAtMs,
+            },
+          });
         }
         this.onAudio(audio);
         this.emit({
