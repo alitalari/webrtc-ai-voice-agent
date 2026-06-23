@@ -93,6 +93,8 @@ export function transition(state: SessionState, event: SessionEvent): Transition
 
     case 'thinking':
       if (event.type === 'agentResponseStarted') return applied('speaking', []);
+      // Response produced nothing (no transcript, or a provider error) → recover.
+      if (event.type === 'agentResponseCompleted') return applied('listening', []);
       // Barge-in before audio even started — the user is now speaking.
       if (event.type === 'userSpeechStarted')
         return applied('userSpeaking', interruptEffects());

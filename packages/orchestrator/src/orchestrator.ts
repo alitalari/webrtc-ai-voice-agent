@@ -153,10 +153,20 @@ export class SessionOrchestrator {
   private beginResponse(): void {
     const gen = ++this.responseGeneration;
     const endpointAtMs = this.now(); // end-of-turn decision time
-    const userText = this.lastFinal || this.lastPartial;
+    const userText = (this.lastFinal || this.lastPartial).trim();
+
+    if (!userText) {
+      // Nothing was recognized this turn (a cough, noise, or ASR returned
+      // nothing) — skip the model and return to listening rather than sending
+      // an empty message.
+      this.apply({ type: 'agentResponseCompleted' });
+      return;
+    }
+
     this.history.push({ role: 'user', content: userText });
 
     this.responseTask = (async () => {
+      try {
       // Accumulate the model's text, then synthesize. Sentence-level pipelining
       // for lower latency is a Phase 3 refinement; the cancellation contract is
       // identical either way.
@@ -196,6 +206,18 @@ export class SessionOrchestrator {
       this.history.push({ role: 'assistant', content: assistantText });
       this.apply({ type: 'agentResponseCompleted' }); // speaking → listening
       this.emit({ type: 'agent.response.completed', sessionId: this.sessionId });
+      } catch (err) {
+        if (gen !== this.responseGeneration) return; // already cancelled — ignore
+        // A provider failed mid-turn. Surface it and recover to listening rather
+        // than crashing the session.
+        this.emit({
+          type: 'error',
+          sessionId: this.sessionId,
+          code: 'provider_error',
+          message: err instanceof Error ? err.message : String(err),
+        });
+        this.apply({ type: 'agentResponseCompleted' });
+      }
     })();
   }
 

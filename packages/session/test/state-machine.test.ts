@@ -139,6 +139,16 @@ describe('inapplicable events are ignored (real-time races, not crashes)', () =>
   });
 });
 
+describe('empty / failed response recovery', () => {
+  it('thinking + agentResponseCompleted returns to listening with no effects', () => {
+    // WHY: if a turn produced no transcript or the provider errored, the session
+    // must not get stuck in `thinking` — it recovers straight to listening.
+    const r = transition('thinking', { type: 'agentResponseCompleted' });
+    expect(r.state).toBe('listening');
+    expect(r.effects).toEqual([]);
+  });
+});
+
 describe('ended is terminal — nothing resurrects a dead session', () => {
   const events: SessionEvent[] = [
     { type: 'start' },

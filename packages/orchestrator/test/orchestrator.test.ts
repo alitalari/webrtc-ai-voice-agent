@@ -106,18 +106,41 @@ describe('SessionOrchestrator — latency metrics', () => {
 
     await orch.start();
     orch.pushVad({ speech: true, timestampMs: 0 });
-    // NO emitFinal — there is no ASR transcript this turn.
+    asr.emitPartial('hello'); // a partial (non-empty text) but no final this turn
     for (let ts = 20; ts <= 140; ts += 20) orch.pushVad({ speech: false, timestampMs: ts });
     await orch.whenResponseSettled();
 
     const metric = events.find((e) => e.type === 'metrics.latency');
     expect(metric).toBeDefined();
     if (metric?.type === 'metrics.latency') {
-      // WHY: without a transcript, "final → first audio" is undefined garbage
+      // WHY: without a final transcript, "final → first audio" is undefined garbage
       // (the bug that showed 1.78e12 in the browser). End-to-end still holds.
       expect(metric.metrics.endToEndTurnMs).toBeDefined();
       expect(metric.metrics.timeToFirstAudioByteMs).toBeUndefined();
     }
+  });
+
+  it('skips the model and returns to listening when nothing was recognized', async () => {
+    const asr = new FakeASRAdapter();
+    const events: ServerEvent[] = [];
+    const orch = new SessionOrchestrator({
+      sessionId: 's1',
+      adapters: { asr, model: new FakeModelAdapter(), tts: new FakeTTSAdapter() },
+      endpointer: { silenceThresholdMs: 100 },
+      onEvent: (e) => events.push(e),
+      onAudio: () => {},
+    });
+
+    await orch.start();
+    orch.pushVad({ speech: true, timestampMs: 0 });
+    // No transcript at all (e.g. a cough) — ASR emits nothing.
+    for (let ts = 20; ts <= 140; ts += 20) orch.pushVad({ speech: false, timestampMs: ts });
+    await orch.whenResponseSettled();
+
+    // WHY: an empty turn must not send the LLM an empty message (a 400) — it is
+    // skipped and the session returns to listening.
+    expect(events.map((e) => e.type)).not.toContain('agent.response.started');
+    expect(orch.state).toBe('listening');
   });
 });
 
