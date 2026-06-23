@@ -44,6 +44,7 @@ export type ServerEvent =
   | { type: 'transcript.partial'; sessionId: string; text: string }
   | { type: 'transcript.final'; sessionId: string; text: string }
   | { type: 'agent.response.started'; sessionId: string }
+  | { type: 'agent.response.text'; sessionId: string; text: string }
   | { type: 'agent.response.audio'; sessionId: string; audioChunkId: string }
   | { type: 'agent.response.completed'; sessionId: string }
   | { type: 'agent.interrupted'; sessionId: string }

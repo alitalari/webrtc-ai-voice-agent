@@ -179,6 +179,9 @@ export class SessionOrchestrator {
       }
       if (gen !== this.responseGeneration) return;
 
+      // The full reply is known before TTS starts — surface it for display.
+      this.emit({ type: 'agent.response.text', sessionId: this.sessionId, text: assistantText });
+
       let started = false;
       for await (const audio of this.adapters.tts.synthesizeStream({ text: assistantText })) {
         if (gen !== this.responseGeneration) return;

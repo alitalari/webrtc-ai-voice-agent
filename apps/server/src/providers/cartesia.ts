@@ -28,6 +28,7 @@ const delay = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms
 export class CartesiaTTSAdapter implements TTSAdapter {
   private ws: WebSocket | undefined;
   private cancelled = false;
+  private contextSeq = 0;
   private readonly apiKey: string;
   private readonly voiceId: string;
   private readonly model: string;
@@ -53,6 +54,7 @@ export class CartesiaTTSAdapter implements TTSAdapter {
     ws.onopen = () => {
       ws.send(
         JSON.stringify({
+          context_id: `ctx-${this.contextSeq++}`,
           model_id: this.model,
           transcript: input.text,
           voice: { mode: 'id', id: input.voiceId ?? this.voiceId },

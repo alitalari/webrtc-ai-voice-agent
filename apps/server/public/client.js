@@ -48,14 +48,15 @@ function showPartial(text) {
   partialEl.textContent = '… ' + text;
   $('transcript').scrollTop = $('transcript').scrollHeight;
 }
-function commitFinal(text) {
-  if (partialEl) {
+function commitLine(who, text, color) {
+  if (who === 'you' && partialEl) {
     partialEl.remove();
     partialEl = null;
   }
   const el = document.createElement('div');
   el.className = 'final';
-  el.textContent = 'you: ' + text;
+  el.innerHTML = `<b style="color:${color}">${who}:</b> `;
+  el.appendChild(document.createTextNode(text));
   $('transcript').appendChild(el);
   $('transcript').scrollTop = $('transcript').scrollHeight;
 }
@@ -107,7 +108,10 @@ function onServerEvent(e) {
       showPartial(e.text);
       break;
     case 'transcript.final':
-      commitFinal(e.text);
+      commitLine('you', e.text, '#4f8cff');
+      break;
+    case 'agent.response.text':
+      commitLine('agent', e.text, '#3ad29f');
       break;
     case 'agent.response.started':
       setSession('speaking');
