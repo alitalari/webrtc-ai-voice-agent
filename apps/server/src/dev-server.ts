@@ -74,7 +74,10 @@ async function serveStatic(req: IncomingMessage, res: ServerResponse): Promise<v
   const ext = path.slice(path.lastIndexOf('.'));
   try {
     const file = await readFile(join(publicDir, path));
-    res.writeHead(200, { 'content-type': CONTENT_TYPES[ext] ?? 'application/octet-stream' });
+    res.writeHead(200, {
+      'content-type': CONTENT_TYPES[ext] ?? 'application/octet-stream',
+      'cache-control': 'no-store', // dev: always serve fresh index.html / client.js
+    });
     res.end(file);
   } catch {
     res.writeHead(404).end('not found');
