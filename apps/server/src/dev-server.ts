@@ -104,7 +104,21 @@ export function startDevServer(): void {
   const server = createServer((req, res) => {
     void (async () => {
       try {
-        if (req.method === 'POST' && req.url === '/session') {
+        if (req.method === 'GET' && req.url === '/status') {
+          res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+          res.end(
+            JSON.stringify({
+              status: 'ok',
+              protocol: PROTOCOL_VERSION,
+              providers: {
+                asr: config.deepgramApiKey ? 'deepgram' : 'fake',
+                llm: config.anthropicApiKey ? config.anthropicModel : 'fake',
+                tts: config.cartesiaApiKey ? 'cartesia' : 'fake',
+              },
+              uptimeSec: Math.round(process.uptime()),
+            }),
+          );
+        } else if (req.method === 'POST' && req.url === '/session') {
           await handleSession(req, res);
         } else {
           await serveStatic(req, res);
