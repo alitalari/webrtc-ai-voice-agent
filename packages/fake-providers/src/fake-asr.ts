@@ -12,18 +12,23 @@ export interface FakeAsrOptions {
   finalAfter?: number;
   partialText?: string;
   finalText?: string;
+  /** Live-demo mode: emit repeatedly (every Nth chunk), cycling phrases. */
+  repeat?: boolean;
+  phrases?: string[];
 }
 
 /**
- * Deterministic stand-in for streaming ASR. Transcripts fire either after a
- * fixed number of audio chunks (so the loop runs end-to-end) or on demand via
- * the `emitPartial` / `emitFinal` hooks (so orchestrator tests stay readable).
+ * Deterministic stand-in for streaming ASR. In default mode transcripts fire
+ * once at fixed chunk counts (used by unit tests). In `repeat` mode it cycles a
+ * set of canned phrases every Nth chunk — enough to make the demo transcript
+ * look alive until real ASR lands.
  */
 export class FakeASRAdapter implements ASRAdapter {
   private partialCb: ((text: string) => void) | undefined;
   private finalCb: ((text: string) => void) | undefined;
   private chunks = 0;
   private sessions = 0;
+  private phraseIdx = 0;
   private readonly opts: Required<FakeAsrOptions>;
 
   constructor(options: FakeAsrOptions = {}) {
@@ -32,6 +37,14 @@ export class FakeASRAdapter implements ASRAdapter {
       finalAfter: options.finalAfter ?? 4,
       partialText: options.partialText ?? 'hello',
       finalText: options.finalText ?? 'hello there',
+      repeat: options.repeat ?? false,
+      phrases: options.phrases ?? [
+        'hello',
+        'how are you',
+        'what can you do',
+        'tell me a joke',
+        'thanks',
+      ],
     };
   }
 
@@ -43,8 +56,16 @@ export class FakeASRAdapter implements ASRAdapter {
 
   async sendAudio(_chunk: AudioChunk): Promise<void> {
     this.chunks += 1;
-    if (this.chunks === this.opts.partialAfter) this.emitPartial();
-    if (this.chunks === this.opts.finalAfter) this.emitFinal();
+    if (this.opts.repeat) {
+      if (this.chunks % this.opts.partialAfter === 0) this.emitPartial(this.currentPhrase());
+      if (this.chunks % this.opts.finalAfter === 0) {
+        this.emitFinal(this.currentPhrase());
+        this.phraseIdx += 1;
+      }
+    } else {
+      if (this.chunks === this.opts.partialAfter) this.emitPartial();
+      if (this.chunks === this.opts.finalAfter) this.emitFinal();
+    }
   }
 
   async stopSession(): Promise<void> {
@@ -67,5 +88,9 @@ export class FakeASRAdapter implements ASRAdapter {
   /** Emit a final transcript immediately (test/orchestration hook). */
   emitFinal(text = this.opts.finalText): void {
     this.finalCb?.(text);
+  }
+
+  private currentPhrase(): string {
+    return this.opts.phrases[this.phraseIdx % this.opts.phrases.length];
   }
 }

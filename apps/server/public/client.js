@@ -1,10 +1,11 @@
-// Plain browser harness for the WebRTC media-path milestone. No build step.
+// Demo harness for the AI Voice SDK. Plain browser JS, served static (no build).
 // Later replaced by the real @voice/web-sdk VoiceSession.
 
 const $ = (id) => document.getElementById(id);
 const log = (msg) => {
-  $('log').textContent += msg + '\n';
-  $('log').scrollTop = $('log').scrollHeight;
+  const el = $('log');
+  el.textContent += msg + '\n';
+  el.scrollTop = el.scrollHeight;
 };
 
 let pc;
@@ -12,7 +13,24 @@ let control;
 let sessionId;
 let localStream;
 
+const latencies = [];
+let turns = 0;
+let partialEl = null;
+
 const sendEvent = (payload) => control.send(JSON.stringify({ kind: 'event', payload }));
+const sendConfig = (payload) => control && control.send(JSON.stringify({ kind: 'config', payload }));
+
+function setConn(state) {
+  $('conn').textContent = state;
+  $('d-conn').textContent = state;
+  $('conn').className = 'pill' + (state === 'connected' ? ' on' : '');
+}
+
+function setSession(state) {
+  $('sess').textContent = state;
+  $('d-sess').textContent = state;
+  $('sess').className = 'pill' + (state === 'speaking' ? ' warn' : state === 'listening' ? ' on' : '');
+}
 
 function setConnectedUi(on) {
   $('connect').textContent = on ? 'Disconnect' : 'Connect';
@@ -20,8 +38,100 @@ function setConnectedUi(on) {
   $('interrupt').disabled = !on;
 }
 
+// --- transcript ---
+function showPartial(text) {
+  if (!partialEl) {
+    partialEl = document.createElement('div');
+    partialEl.className = 'partial';
+    $('transcript').appendChild(partialEl);
+  }
+  partialEl.textContent = '… ' + text;
+  $('transcript').scrollTop = $('transcript').scrollHeight;
+}
+function commitFinal(text) {
+  if (partialEl) {
+    partialEl.remove();
+    partialEl = null;
+  }
+  const el = document.createElement('div');
+  el.className = 'final';
+  el.textContent = 'you: ' + text;
+  $('transcript').appendChild(el);
+  $('transcript').scrollTop = $('transcript').scrollHeight;
+}
+
+// --- latency chart ---
+function drawChart() {
+  const c = $('chart');
+  const ctx = c.getContext('2d');
+  const W = c.width;
+  const H = c.height;
+  ctx.clearRect(0, 0, W, H);
+
+  const budget = 1100;
+  const max = Math.max(1200, ...latencies);
+  const by = H - (budget / max) * H;
+  ctx.strokeStyle = '#f5a623';
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  ctx.moveTo(0, by);
+  ctx.lineTo(W, by);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = '#f5a623';
+  ctx.font = '11px system-ui';
+  ctx.fillText('budget ' + budget + 'ms', 6, by - 4);
+
+  const bw = 34;
+  const visible = latencies.slice(-Math.floor(W / (bw + 8)));
+  visible.forEach((v, i) => {
+    const x = i * (bw + 8) + 8;
+    const h = (v / max) * H;
+    const y = H - h;
+    ctx.fillStyle = v <= budget ? '#3ad29f' : '#ff6b6b';
+    ctx.fillRect(x, y, bw, h);
+    ctx.fillStyle = '#e6e9ef';
+    ctx.font = '10px system-ui';
+    ctx.fillText(Math.round(v), x, y - 4);
+  });
+}
+
+// --- server events ---
+function onServerEvent(e) {
+  log('⬅ ' + JSON.stringify(e));
+  switch (e.type) {
+    case 'session.started':
+      setSession('listening');
+      break;
+    case 'transcript.partial':
+      showPartial(e.text);
+      break;
+    case 'transcript.final':
+      commitFinal(e.text);
+      break;
+    case 'agent.response.started':
+      setSession('speaking');
+      break;
+    case 'agent.response.completed':
+      setSession('listening');
+      break;
+    case 'agent.interrupted':
+      setSession('listening');
+      break;
+    case 'metrics.latency':
+      if (typeof e.metrics.endToEndTurnMs === 'number') {
+        latencies.push(e.metrics.endToEndTurnMs);
+        turns += 1;
+        $('d-turns').textContent = turns;
+        drawChart();
+      }
+      break;
+  }
+}
+
+// --- connection ---
 async function connect() {
-  $('conn').textContent = 'connecting…';
+  setConn('connecting…');
   $('connect').disabled = true;
 
   localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -30,27 +140,19 @@ async function connect() {
 
   pc.ontrack = (e) => {
     $('remote').srcObject = e.streams[0];
-    log('▶ remote audio attached (you should hear yourself echoed)');
   };
   pc.onconnectionstatechange = () => {
-    $('conn').textContent = pc.connectionState;
-    log('connection: ' + pc.connectionState);
+    setConn(pc.connectionState);
     if (pc.connectionState === 'failed' || pc.connectionState === 'closed') disconnect();
   };
 
   control = pc.createDataChannel('control');
   control.onopen = () => {
-    log('control channel open');
-    // Begin the voice-session lifecycle on top of the transport (what the old
-    // "Start session" button did) — one step now.
     sendEvent({ type: 'session.start', sessionId });
-    log('➡ session.start');
     setConnectedUi(true);
+    log('control channel open · session.start sent');
   };
-  control.onmessage = (e) => {
-    const msg = JSON.parse(e.data);
-    if (msg.kind === 'event') log('⬅ ' + JSON.stringify(msg.payload));
-  };
+  control.onmessage = (e) => onServerEvent(JSON.parse(e.data).payload);
 
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
@@ -64,7 +166,6 @@ async function connect() {
   const { answer, sessionId: sid } = await resp.json();
   sessionId = sid;
   await pc.setRemoteDescription({ type: 'answer', sdp: answer });
-  log('answer applied; session ' + sessionId);
 }
 
 function disconnect() {
@@ -75,8 +176,8 @@ function disconnect() {
   control = undefined;
   localStream = undefined;
   $('remote').srcObject = null;
-  $('conn').textContent = 'idle';
-  log('disconnected');
+  setConn('idle');
+  setSession('—');
   setConnectedUi(false);
 }
 
@@ -89,6 +190,7 @@ function waitIceComplete(peer) {
   });
 }
 
+// --- wiring ---
 $('connect').onclick = () => {
   if (pc) {
     disconnect();
@@ -104,3 +206,12 @@ $('interrupt').onclick = () => {
   sendEvent({ type: 'agent.interrupt', sessionId, reason: 'manual' });
   log('➡ agent.interrupt');
 };
+
+for (const id of ['asr', 'llm', 'tts']) {
+  $(id).onchange = () => {
+    $('d-prov').textContent = `${$('asr').value} · ${$('llm').value} · ${$('tts').value}`;
+    sendConfig({ asr: $('asr').value, llm: $('llm').value, tts: $('tts').value });
+  };
+}
+
+drawChart();

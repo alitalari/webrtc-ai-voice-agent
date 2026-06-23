@@ -18,7 +18,8 @@ const CHANNELS = 2;
 
 type ControlMessage =
   | { kind: 'event'; payload: ClientEvent }
-  | { kind: 'vad'; payload: VadFrame };
+  | { kind: 'vad'; payload: VadFrame }
+  | { kind: 'config'; payload: unknown };
 
 /**
  * Real WebRTC implementation of the `ServerTransport` seam (werift).
@@ -30,6 +31,7 @@ type ControlMessage =
  */
 export class WeriftServerTransport implements ServerTransport {
   private clientEventCb: ((event: ClientEvent) => void) | undefined;
+  private userAudioCb: ((chunk: AudioChunk) => void) | undefined;
   private userVadCb: ((frame: VadFrame) => void) | undefined;
   private control: RTCDataChannel | undefined;
 
@@ -78,6 +80,15 @@ export class WeriftServerTransport implements ServerTransport {
       console.log(`[vad] ${speech ? 'speech ' : 'silence'} @ ${Math.round(this.vadClockMs)}ms`);
     }
     this.userVadCb?.({ speech, timestampMs: this.vadClockMs });
+
+    // Feed speech frames to ASR (fake ASR counts them to drive transcripts).
+    if (speech) {
+      this.userAudioCb?.({
+        data: new Uint8Array(mono.buffer, mono.byteOffset, mono.byteLength),
+        sampleRate: SAMPLE_RATE,
+        timestampMs: this.vadClockMs,
+      });
+    }
   }
 
   private handleControl(data: string | Buffer): void {
@@ -90,6 +101,7 @@ export class WeriftServerTransport implements ServerTransport {
     }
     if (message.kind === 'event') this.clientEventCb?.(message.payload);
     else if (message.kind === 'vad') this.userVadCb?.(message.payload);
+    else if (message.kind === 'config') console.log('[config]', JSON.stringify(message.payload));
   }
 
   sendEvent(event: ServerEvent): void {
@@ -125,8 +137,8 @@ export class WeriftServerTransport implements ServerTransport {
     this.clientEventCb = cb;
   }
 
-  onUserAudio(_cb: (chunk: AudioChunk) => void): void {
-    // Decoded PCM is consumed by VAD here, not forwarded to ASR yet (Phase 3).
+  onUserAudio(cb: (chunk: AudioChunk) => void): void {
+    this.userAudioCb = cb;
   }
 
   onUserVad(cb: (frame: VadFrame) => void): void {

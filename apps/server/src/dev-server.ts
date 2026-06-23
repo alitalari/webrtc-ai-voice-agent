@@ -34,18 +34,20 @@ async function handleSession(req: IncomingMessage, res: ServerResponse): Promise
   const sessionId = `s-${++sessionCounter}`;
 
   const { answerSdp, transport } = await createWeriftSession(offer);
-  // Dev wiring: fake providers. Real server-side VAD drives turns; the fake TTS
-  // emits a ~1s 48kHz tone, paced in real time (20ms/frame) so it plays smoothly.
+  // Dev wiring: fake providers, given *realistic* latency so the demo's timing
+  // and latency chart feel like a real voice agent (real providers swap in at
+  // Phase 3). Real server-side VAD drives turns; fake TTS is a ~1s 48kHz tone
+  // paced at 20ms/frame.
   createSession({
     sessionId,
     transport,
     adapters: {
-      asr: new FakeASRAdapter(),
-      model: new FakeModelAdapter(),
+      asr: new FakeASRAdapter({ repeat: true, partialAfter: 8, finalAfter: 26 }),
+      model: new FakeModelAdapter({ sleep: (i) => delay(i === 0 ? 300 : 20) }), // ~300ms to first token
       tts: new FakeTTSAdapter({
         sampleRate: 48000,
         chunkCount: 50,
-        sleep: () => delay(20),
+        sleep: (i) => delay(i === 0 ? 120 : 20), // ~120ms to first audio byte
       }),
     },
     endpointer: { silenceThresholdMs: 600 },
