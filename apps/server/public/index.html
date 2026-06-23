@@ -14,10 +14,12 @@
   <body>
     <h1>WebRTC media-path test</h1>
     <p>
-      Milestone 2: <strong>Connect</strong>, then <strong>just talk</strong>. The server
+      Milestone 3: <strong>Connect</strong>, then <strong>just talk</strong>. The server
       decodes your mic, runs energy VAD, and when you speak then pause it detects the
-      turn — watch for <code>agent.response.*</code> and <code>metrics.latency</code>.
-      You'll also hear your mic echoed back. (Agent TTS audio is the next milestone.)
+      turn — watch for <code>agent.response.*</code>. You should then <strong>hear the
+      agent respond with a ~1s tone</strong> (fake TTS encoded to Opus on a clean
+      return stream — no more echo). <strong>Interrupt</strong> while it plays to
+      barge in.
     </p>
     <p>
       <button id="connect">Connect</button>

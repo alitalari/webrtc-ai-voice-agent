@@ -18,6 +18,8 @@ const CONTENT_TYPES: Record<string, string> = {
 
 let sessionCounter = 0;
 
+const delay = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
 function readBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
@@ -32,15 +34,19 @@ async function handleSession(req: IncomingMessage, res: ServerResponse): Promise
   const sessionId = `s-${++sessionCounter}`;
 
   const { answerSdp, transport } = await createWeriftSession(offer);
-  // Dev wiring: fake providers. Turn-taking is driven by client-supplied VAD over
-  // the control channel until the Opus decoder + real VAD land.
+  // Dev wiring: fake providers. Real server-side VAD drives turns; the fake TTS
+  // emits a ~1s 48kHz tone, paced in real time (20ms/frame) so it plays smoothly.
   createSession({
     sessionId,
     transport,
     adapters: {
       asr: new FakeASRAdapter(),
       model: new FakeModelAdapter(),
-      tts: new FakeTTSAdapter(),
+      tts: new FakeTTSAdapter({
+        sampleRate: 48000,
+        chunkCount: 50,
+        sleep: () => delay(20),
+      }),
     },
     endpointer: { silenceThresholdMs: 600 },
   });
