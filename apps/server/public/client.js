@@ -13,13 +13,10 @@ let sessionId;
 let localStream;
 
 const sendEvent = (payload) => control.send(JSON.stringify({ kind: 'event', payload }));
-const sendVad = (speech, timestampMs) =>
-  control.send(JSON.stringify({ kind: 'vad', payload: { speech, timestampMs } }));
 
 function setConnectedUi(on) {
   $('connect').textContent = on ? 'Disconnect' : 'Connect';
   $('connect').disabled = false;
-  $('turn').disabled = !on;
   $('interrupt').disabled = !on;
 }
 
@@ -106,12 +103,4 @@ $('connect').onclick = () => {
 $('interrupt').onclick = () => {
   sendEvent({ type: 'agent.interrupt', sessionId, reason: 'manual' });
   log('➡ agent.interrupt');
-};
-
-// Simulate a turn: ~300ms of "speech" then >600ms of "silence" to trigger an endpoint.
-$('turn').onclick = () => {
-  log('➡ simulating a turn (VAD)');
-  let t = 0;
-  for (; t <= 300; t += 20) sendVad(true, t);
-  for (; t <= 1100; t += 20) sendVad(false, t);
 };

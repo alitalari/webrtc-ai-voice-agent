@@ -4,15 +4,20 @@ import {
   RTCRtpCodecParameters,
   type RTCDataChannel,
 } from 'werift';
+import OpusScript from 'opusscript';
+import { EnergyVad } from '@voice/media';
 import type { ServerTransport } from '@voice/orchestrator';
 import type { ClientEvent, ServerEvent } from '@voice/protocol';
 import type { AudioChunk } from '@voice/provider-interfaces';
 import type { VadFrame } from '@voice/session';
 
+const SAMPLE_RATE = 48000;
+const CHANNELS = 2;
+
 /**
  * Control-channel framing over the WebRTC data channel — just enough to
- * multiplex protocol events and (for now) client-supplied VAD on one reliable
- * channel. Distinct from the protocol's wire envelope.
+ * multiplex protocol events and (as a fallback) client-supplied VAD on one
+ * reliable channel. Distinct from the protocol's wire envelope.
  */
 type ControlMessage =
   | { kind: 'event'; payload: ClientEvent }
@@ -21,18 +26,20 @@ type ControlMessage =
 /**
  * Real WebRTC implementation of the `ServerTransport` seam (werift).
  *
- * Milestone 1 (this file): prove the media path. The browser's mic audio is
- * echoed straight back over a return track (RTP relay, no codec needed), and
- * control events flow over the data channel. Real VAD from decoded audio and
- * agent TTS playback land with the Opus codec in the next milestone — until
- * then the client supplies VAD over the control channel and `sendAudio` is a
- * no-op.
+ * Milestone 2: the inbound mic audio is decoded (Opus → PCM) and run through
+ * real energy VAD, so the user's voice — not a button — drives turn-taking. The
+ * audio is still echoed back so you can hear yourself. Agent TTS playback onto
+ * the return track is the remaining piece (needs PCM→Opus encode).
  */
 export class WeriftServerTransport implements ServerTransport {
   private clientEventCb: ((event: ClientEvent) => void) | undefined;
-  private userAudioCb: ((chunk: AudioChunk) => void) | undefined;
   private userVadCb: ((frame: VadFrame) => void) | undefined;
   private control: RTCDataChannel | undefined;
+
+  private readonly decoder = new OpusScript(SAMPLE_RATE, CHANNELS);
+  private readonly vad = new EnergyVad();
+  private vadClockMs = 0;
+  private lastSpeech = false;
 
   constructor(
     private readonly pc: RTCPeerConnection,
@@ -45,8 +52,34 @@ export class WeriftServerTransport implements ServerTransport {
     });
 
     pc.onTrack.subscribe((track) => {
-      track.onReceiveRtp.subscribe((rtp) => this.outgoingAudio.writeRtp(rtp));
+      track.onReceiveRtp.subscribe((rtp) => {
+        this.outgoingAudio.writeRtp(rtp); // echo, so the user hears themselves
+        this.detectVad(rtp.payload);
+      });
     });
+  }
+
+  /** Decode one Opus RTP payload → PCM → energy VAD → a turn signal. */
+  private detectVad(payload: Buffer): void {
+    let pcm: Buffer;
+    try {
+      pcm = this.decoder.decode(payload);
+    } catch {
+      return; // skip undecodable packets (comfort noise / DTX / partial)
+    }
+    if (!pcm || pcm.length === 0) return;
+
+    const mono = toMonoInt16(pcm, CHANNELS);
+    // 48 samples == 1ms at 48kHz; advance the audio-timeline clock.
+    this.vadClockMs += mono.length / (SAMPLE_RATE / 1000);
+
+    const speech = this.vad.isSpeech(mono);
+    if (speech !== this.lastSpeech) {
+      this.lastSpeech = speech;
+      // Server-terminal readout so VAD activity is visible while tuning.
+      console.log(`[vad] ${speech ? 'speech ' : 'silence'} @ ${Math.round(this.vadClockMs)}ms`);
+    }
+    this.userVadCb?.({ speech, timestampMs: this.vadClockMs });
   }
 
   private handleControl(data: string | Buffer): void {
@@ -67,15 +100,14 @@ export class WeriftServerTransport implements ServerTransport {
 
   sendAudio(_chunk: AudioChunk): void {
     // Agent TTS audio → outgoing track requires PCM→Opus encode (next milestone).
-    void this.userAudioCb;
   }
 
   onClientEvent(cb: (event: ClientEvent) => void): void {
     this.clientEventCb = cb;
   }
 
-  onUserAudio(cb: (chunk: AudioChunk) => void): void {
-    this.userAudioCb = cb;
+  onUserAudio(_cb: (chunk: AudioChunk) => void): void {
+    // Decoded PCM is consumed by VAD here, not forwarded to ASR yet (Phase 3).
   }
 
   onUserVad(cb: (frame: VadFrame) => void): void {
@@ -83,8 +115,19 @@ export class WeriftServerTransport implements ServerTransport {
   }
 
   close(): void {
+    this.decoder.delete();
     void this.pc.close();
   }
+}
+
+/** De-interleave 16-bit PCM and keep the left channel as a mono frame. */
+function toMonoInt16(pcm: Buffer, channels: number): Int16Array {
+  const frames = Math.floor(pcm.length / 2 / channels);
+  const out = new Int16Array(frames);
+  for (let i = 0; i < frames; i++) {
+    out[i] = pcm.readInt16LE(i * channels * 2);
+  }
+  return out;
 }
 
 export interface WeriftSession {
@@ -100,8 +143,8 @@ export async function createWeriftSession(offerSdp: string): Promise<WeriftSessi
       audio: [
         new RTCRtpCodecParameters({
           mimeType: 'audio/opus',
-          clockRate: 48000,
-          channels: 2,
+          clockRate: SAMPLE_RATE,
+          channels: CHANNELS,
           payloadType: 96,
         }),
       ],
