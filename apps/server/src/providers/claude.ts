@@ -64,4 +64,17 @@ export class ClaudeModelAdapter implements ModelAdapter {
   async cancel(): Promise<void> {
     this.controller?.abort();
   }
+
+  /** Establish the HTTPS connection up front so the first real turn isn't cold. */
+  async warmup(): Promise<void> {
+    try {
+      await this.client.messages.create({
+        model: this.model,
+        max_tokens: 1,
+        messages: [{ role: 'user', content: 'hi' }],
+      });
+    } catch {
+      // Best-effort connection warming.
+    }
+  }
 }

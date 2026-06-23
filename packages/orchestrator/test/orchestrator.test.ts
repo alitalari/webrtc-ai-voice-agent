@@ -55,9 +55,9 @@ describe('SessionOrchestrator — happy path', () => {
 
 describe('SessionOrchestrator — latency metrics', () => {
   it('emits metrics.latency on first audio with budget-relevant deltas', async () => {
-    // Injected clock returns 10, 20, 30 on successive calls: final transcript at
-    // t=10, endpoint at t=20, first audio at t=30. So final→audio = 20, end-to-end
-    // (endpoint→audio) = 10. Deterministic, no real time.
+    // Injected clock ticks +10 per now() call, in this order: speech start=10,
+    // ASR final=20, endpoint=30, first token=40, model done=50, first audio=60.
+    // So final→audio = 60-20 = 40 and end-to-end (endpoint→audio) = 60-30 = 30.
     let t = 0;
     const now = () => (t += 10);
 
@@ -85,8 +85,8 @@ describe('SessionOrchestrator — latency metrics', () => {
     const metric = events.find((e) => e.type === 'metrics.latency');
     expect(metric).toBeDefined();
     if (metric?.type === 'metrics.latency') {
-      expect(metric.metrics.timeToFirstAudioByteMs).toBe(20);
-      expect(metric.metrics.endToEndTurnMs).toBe(10);
+      expect(metric.metrics.timeToFirstAudioByteMs).toBe(40);
+      expect(metric.metrics.endToEndTurnMs).toBe(30);
     }
   });
 

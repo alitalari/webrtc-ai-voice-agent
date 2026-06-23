@@ -40,6 +40,11 @@ async function handleSession(req: IncomingMessage, res: ServerResponse): Promise
   const sessionId = `s-${++sessionCounter}`;
 
   const { answerSdp, transport } = await createWeriftSession(offer, config.vadThreshold);
+
+  const model = config.anthropicApiKey
+    ? new ClaudeModelAdapter({ apiKey: config.anthropicApiKey, model: config.anthropicModel })
+    : new FakeModelAdapter({ sleep: (i) => delay(i === 0 ? 300 : 20) });
+  if (model instanceof ClaudeModelAdapter) void model.warmup(); // warm the connection
   // Dev wiring: fake providers, given *realistic* latency so the demo's timing
   // and latency chart feel like a real voice agent (real providers swap in at
   // Phase 3). Real server-side VAD drives turns; fake TTS is a ~1s 48kHz tone
@@ -51,9 +56,7 @@ async function handleSession(req: IncomingMessage, res: ServerResponse): Promise
       asr: config.deepgramApiKey
         ? new DeepgramASRAdapter({ apiKey: config.deepgramApiKey })
         : new FakeASRAdapter({ repeat: true, partialAfter: 8, finalAfter: 26 }),
-      model: config.anthropicApiKey
-        ? new ClaudeModelAdapter({ apiKey: config.anthropicApiKey, model: config.anthropicModel })
-        : new FakeModelAdapter({ sleep: (i) => delay(i === 0 ? 300 : 20) }), // ~300ms to first token
+      model,
       tts: config.cartesiaApiKey
         ? new CartesiaTTSAdapter({ apiKey: config.cartesiaApiKey, voiceId: config.cartesiaVoiceId })
         : new FakeTTSAdapter({
@@ -63,7 +66,7 @@ async function handleSession(req: IncomingMessage, res: ServerResponse): Promise
           }),
     },
     // speechOnsetMs: require sustained speech to open a turn (filters brief noise).
-    endpointer: { silenceThresholdMs: 600, speechOnsetMs: 150 },
+    endpointer: { silenceThresholdMs: 450, speechOnsetMs: 150 },
     onTiming: (t) => {
       const ms = (n: number) => `${Math.round(n)}ms`;
       console.log(
