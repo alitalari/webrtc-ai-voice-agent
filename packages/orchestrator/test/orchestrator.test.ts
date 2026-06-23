@@ -142,6 +142,34 @@ describe('SessionOrchestrator — latency metrics', () => {
     expect(events.map((e) => e.type)).not.toContain('agent.response.started');
     expect(orch.state).toBe('listening');
   });
+
+  it('does not reuse a transcript on a later turn without fresh ASR', async () => {
+    const asr = new FakeASRAdapter();
+    const events: ServerEvent[] = [];
+    const orch = new SessionOrchestrator({
+      sessionId: 's1',
+      adapters: { asr, model: new FakeModelAdapter(), tts: new FakeTTSAdapter({ chunkCount: 1 }) },
+      endpointer: { silenceThresholdMs: 100 },
+      onEvent: (e) => events.push(e),
+      onAudio: () => {},
+    });
+
+    await orch.start();
+    // Turn 1: a real transcript → one response.
+    orch.pushVad({ speech: true, timestampMs: 0 });
+    asr.emitFinal('what is two plus two');
+    for (let t = 20; t <= 140; t += 20) orch.pushVad({ speech: false, timestampMs: t });
+    await orch.whenResponseSettled();
+
+    // Turn 2: a noise blip while silent, NO new transcript.
+    orch.pushVad({ speech: true, timestampMs: 1000 });
+    for (let t = 1020; t <= 1140; t += 20) orch.pushVad({ speech: false, timestampMs: t });
+    await orch.whenResponseSettled();
+
+    // WHY: the stale transcript must NOT be re-sent — only the first turn responds.
+    const responses = events.filter((e) => e.type === 'agent.response.started').length;
+    expect(responses).toBe(1);
+  });
 });
 
 describe('SessionOrchestrator — barge-in cancellation contract', () => {

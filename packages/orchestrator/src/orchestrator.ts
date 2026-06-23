@@ -154,6 +154,12 @@ export class SessionOrchestrator {
     const gen = ++this.responseGeneration;
     const endpointAtMs = this.now(); // end-of-turn decision time
     const userText = (this.lastFinal || this.lastPartial).trim();
+    const finalAtMs = this.lastFinalAtMs;
+    // Consume the transcript so a later turn (e.g. a noise blip while silent)
+    // doesn't re-send the same text and make the agent repeat itself.
+    this.lastFinal = '';
+    this.lastPartial = '';
+    this.lastFinalAtMs = 0;
 
     if (!userText) {
       // Nothing was recognized this turn (a cough, noise, or ASR returned
@@ -192,8 +198,8 @@ export class SessionOrchestrator {
           const firstAudioAtMs = this.now();
           const metrics: LatencyMetrics = { endToEndTurnMs: firstAudioAtMs - endpointAtMs };
           // Only meaningful once ASR has produced a final transcript this turn.
-          if (this.lastFinalAtMs > 0) {
-            metrics.timeToFirstAudioByteMs = firstAudioAtMs - this.lastFinalAtMs;
+          if (finalAtMs > 0) {
+            metrics.timeToFirstAudioByteMs = firstAudioAtMs - finalAtMs;
           }
           this.emit({ type: 'metrics.latency', sessionId: this.sessionId, metrics });
         }
