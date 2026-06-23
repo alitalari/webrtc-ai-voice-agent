@@ -36,6 +36,7 @@ export class DeepgramASRAdapter implements ASRAdapter {
   private partialCb: ((text: string) => void) | undefined;
   private finalCb: ((text: string) => void) | undefined;
   private utterance = '';
+  private lastAudioAt = 0;
   private sessions = 0;
   private readonly apiKey: string;
   private readonly model: string;
@@ -78,6 +79,14 @@ export class DeepgramASRAdapter implements ASRAdapter {
 
   async sendAudio(chunk: AudioChunk): Promise<void> {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+
+    // We stream only speech frames, so a gap means the previous utterance ended.
+    // Reset the accumulator (Deepgram's own speech_final rarely fires without
+    // silence in the stream), so turns don't concatenate.
+    const now = Date.now();
+    if (this.lastAudioAt && now - this.lastAudioAt > 700) this.utterance = '';
+    this.lastAudioAt = now;
+
     const samples = int16FromChunk(chunk);
     const factor = Math.max(1, Math.round(chunk.sampleRate / TARGET_RATE));
     this.ws.send(downsample(samples, factor));

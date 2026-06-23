@@ -246,6 +246,7 @@ export class SessionOrchestrator {
       if (gen !== this.responseGeneration) return;
 
       this.history.push({ role: 'assistant', content: assistantText });
+      this.trimHistory();
       this.apply({ type: 'agentResponseCompleted' }); // speaking → listening
       this.emit({ type: 'agent.response.completed', sessionId: this.sessionId });
       } catch (err) {
@@ -261,6 +262,13 @@ export class SessionOrchestrator {
         this.apply({ type: 'agentResponseCompleted' });
       }
     })();
+  }
+
+  /** Keep the prompt bounded: retain ~4 recent exchanges, starting with a user turn. */
+  private trimHistory(): void {
+    const MAX = 8;
+    if (this.history.length > MAX) this.history.splice(0, this.history.length - MAX);
+    if (this.history[0]?.role === 'assistant') this.history.shift(); // Claude must start with user
   }
 
   private emit(event: ServerEvent): void {
