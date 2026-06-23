@@ -17,6 +17,10 @@ export interface LatencyMetrics {
   timeToFirstAudioByteMs?: number;
   /** End of user speech → first audio in the user's ear. */
   endToEndTurnMs?: number;
+  /** Breakdown of endpoint → first audio (these sum to ~endToEndTurnMs). */
+  llmTtftMs?: number; // endpoint → first LLM token
+  llmGenMs?: number; // first token → model done
+  ttsMs?: number; // model done → first audio byte
 }
 
 export interface TranscriptEvent {

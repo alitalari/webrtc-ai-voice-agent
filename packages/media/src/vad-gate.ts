@@ -20,7 +20,7 @@ export class VadGate {
   private lastSpeechMs = -Infinity;
 
   constructor(config: VadGateConfig = {}) {
-    this.hangoverMs = config.hangoverMs ?? 250;
+    this.hangoverMs = config.hangoverMs ?? 300;
   }
 
   /** Smooth a raw per-frame speech flag into a debounced one. */

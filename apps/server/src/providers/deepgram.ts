@@ -36,7 +36,6 @@ export class DeepgramASRAdapter implements ASRAdapter {
   private partialCb: ((text: string) => void) | undefined;
   private finalCb: ((text: string) => void) | undefined;
   private utterance = '';
-  private lastAudioAt = 0;
   private sessions = 0;
   private readonly apiKey: string;
   private readonly model: string;
@@ -56,6 +55,7 @@ export class DeepgramASRAdapter implements ASRAdapter {
       interim_results: 'true',
       punctuate: 'true',
       smart_format: 'true',
+      endpointing: '300', // Deepgram segments on ~300ms of silence in the stream
     });
     const ws = new WebSocket(`wss://api.deepgram.com/v1/listen?${params.toString()}`, [
       'token',
@@ -79,14 +79,6 @@ export class DeepgramASRAdapter implements ASRAdapter {
 
   async sendAudio(chunk: AudioChunk): Promise<void> {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
-
-    // We stream only speech frames, so a gap means the previous utterance ended.
-    // Reset the accumulator (Deepgram's own speech_final rarely fires without
-    // silence in the stream), so turns don't concatenate.
-    const now = Date.now();
-    if (this.lastAudioAt && now - this.lastAudioAt > 700) this.utterance = '';
-    this.lastAudioAt = now;
-
     const samples = int16FromChunk(chunk);
     const factor = Math.max(1, Math.round(chunk.sampleRate / TARGET_RATE));
     this.ws.send(downsample(samples, factor));
@@ -110,6 +102,10 @@ export class DeepgramASRAdapter implements ASRAdapter {
     this.finalCb = callback;
   }
 
+  endUtterance(): void {
+    this.utterance = '';
+  }
+
   private onMessage(e: MessageEvent): void {
     if (typeof e.data !== 'string') return;
     let msg: DeepgramResults;
@@ -124,12 +120,11 @@ export class DeepgramASRAdapter implements ASRAdapter {
     if (!text) return;
 
     if (msg.is_final) {
+      // Accumulate across this turn; reset happens on endUtterance (our boundary).
       this.utterance = `${this.utterance} ${text}`.trim();
-      console.log(`[asr] final${msg.speech_final ? ' (speech_final)' : ''}: "${this.utterance}"`);
+      console.log(`[asr] final: "${this.utterance}"`);
       this.finalCb?.(this.utterance);
-      if (msg.speech_final) this.utterance = ''; // end of utterance → start fresh
     } else {
-      console.log(`[asr] partial: "${`${this.utterance} ${text}`.trim()}"`);
       this.partialCb?.(`${this.utterance} ${text}`.trim());
     }
   }

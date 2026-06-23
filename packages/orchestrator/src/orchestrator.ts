@@ -141,6 +141,7 @@ export class SessionOrchestrator {
     this.executeEffects(effects);
     if (prev === 'listening' && this.machine.state === 'userSpeaking') {
       this.turnSpeechStartedAt = this.now(); // start of a fresh user turn
+      this.adapters.asr.endUtterance?.(); // fresh transcript — drop pre-turn noise
     }
     if (this.machine.state === 'thinking' && prev !== 'thinking') {
       this.beginResponse();
@@ -219,7 +220,12 @@ export class SessionOrchestrator {
           this.apply({ type: 'agentResponseStarted' }); // thinking → speaking
           this.emit({ type: 'agent.response.started', sessionId: this.sessionId });
           const firstAudioAtMs = this.now();
-          const metrics: LatencyMetrics = { endToEndTurnMs: firstAudioAtMs - endpointAtMs };
+          const metrics: LatencyMetrics = {
+            endToEndTurnMs: firstAudioAtMs - endpointAtMs,
+            llmTtftMs: firstTokenAt - endpointAtMs,
+            llmGenMs: modelDoneAt - firstTokenAt,
+            ttsMs: firstAudioAtMs - modelDoneAt,
+          };
           // Only meaningful once ASR has produced a final transcript this turn.
           if (finalAtMs > 0) {
             metrics.timeToFirstAudioByteMs = firstAudioAtMs - finalAtMs;

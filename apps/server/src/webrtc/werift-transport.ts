@@ -84,14 +84,13 @@ export class WeriftServerTransport implements ServerTransport {
     }
     this.userVadCb?.({ speech, timestampMs: this.vadClockMs });
 
-    // Feed speech frames to ASR (fake ASR counts them to drive transcripts).
-    if (speech) {
-      this.userAudioCb?.({
-        data: new Uint8Array(mono.buffer, mono.byteOffset, mono.byteLength),
-        sampleRate: SAMPLE_RATE,
-        timestampMs: this.vadClockMs,
-      });
-    }
+    // Feed CONTINUOUS audio to ASR — Deepgram needs the silences to do its own
+    // endpointing/segmentation. Turn-taking still uses our VAD (above).
+    this.userAudioCb?.({
+      data: new Uint8Array(mono.buffer, mono.byteOffset, mono.byteLength),
+      sampleRate: SAMPLE_RATE,
+      timestampMs: this.vadClockMs,
+    });
   }
 
   private handleControl(data: string | Buffer): void {

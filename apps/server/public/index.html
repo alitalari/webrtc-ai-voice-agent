@@ -61,8 +61,13 @@
         <div id="transcript"></div>
       </section>
       <section class="panel">
-        <h2>Turn latency · end-to-end (ms)</h2>
-        <canvas id="chart" width="640" height="210"></canvas>
+        <h2>Turn latency · endpoint → audio (stacked)</h2>
+        <div style="display: flex; gap: 14px; font-size: 12px; color: var(--muted); margin-bottom: 6px">
+          <span><span style="color: #4f8cff">■</span> LLM first token</span>
+          <span><span style="color: #a06bff">■</span> LLM generate</span>
+          <span><span style="color: #3ad29f">■</span> TTS</span>
+        </div>
+        <canvas id="chart" width="640" height="200"></canvas>
       </section>
       <section class="panel full">
         <h2>Debug</h2>
@@ -77,8 +82,9 @@
     </main>
 
     <p class="sub" style="padding: 0 24px 24px">
-      Running on fake providers (a tone + canned transcript) so it needs no keys. The provider
-      dropdowns are illustrative until real Deepgram / Claude / Cartesia land (Phase 3).
+      Each provider runs real when its key is set in <code>apps/server/.env</code>, else falls back
+      to a fake (tone + canned transcript). The provider dropdowns are illustrative — live switching
+      is future work.
     </p>
 
     <audio id="remote" autoplay></audio>

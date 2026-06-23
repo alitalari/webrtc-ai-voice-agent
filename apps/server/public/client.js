@@ -13,7 +13,7 @@ let control;
 let sessionId;
 let localStream;
 
-const latencies = [];
+const turnBars = []; // each: { ttft, gen, tts }
 let turns = 0;
 let partialEl = null;
 
@@ -69,31 +69,56 @@ function drawChart() {
   const H = c.height;
   ctx.clearRect(0, 0, W, H);
 
-  const budget = 1100;
-  const max = Math.max(1200, ...latencies);
-  const by = H - (budget / max) * H;
+  const maxMs = 2000; // y-axis to 2s
+  const yFor = (ms) => H - (ms / maxMs) * H;
+  const axisX = 30;
+
+  // gridlines + labels every 0.5s
+  ctx.font = '10px system-ui';
+  for (let g = 500; g <= maxMs; g += 500) {
+    const y = yFor(g);
+    ctx.strokeStyle = '#2a2f3a';
+    ctx.beginPath();
+    ctx.moveTo(axisX, y);
+    ctx.lineTo(W, y);
+    ctx.stroke();
+    ctx.fillStyle = '#8b93a3';
+    ctx.fillText(g / 1000 + 's', 3, y + 3);
+  }
+
+  // budget line at 1.1s
+  const by = yFor(1100);
   ctx.strokeStyle = '#f5a623';
   ctx.setLineDash([4, 4]);
   ctx.beginPath();
-  ctx.moveTo(0, by);
+  ctx.moveTo(axisX, by);
   ctx.lineTo(W, by);
   ctx.stroke();
   ctx.setLineDash([]);
-  ctx.fillStyle = '#f5a623';
-  ctx.font = '11px system-ui';
-  ctx.fillText('budget ' + budget + 'ms', 6, by - 4);
 
+  // stacked bars: LLM ttft (bottom) → LLM gen → TTS (top)
+  const segs = [
+    ['ttft', '#4f8cff'],
+    ['gen', '#a06bff'],
+    ['tts', '#3ad29f'],
+  ];
   const bw = 34;
-  const visible = latencies.slice(-Math.floor(W / (bw + 8)));
-  visible.forEach((v, i) => {
-    const x = i * (bw + 8) + 8;
-    const h = (v / max) * H;
-    const y = H - h;
-    ctx.fillStyle = v <= budget ? '#3ad29f' : '#ff6b6b';
-    ctx.fillRect(x, y, bw, h);
+  const gap = 10;
+  const x0 = axisX + 8;
+  const visible = turnBars.slice(-Math.floor((W - x0) / (bw + gap)));
+  visible.forEach((t, i) => {
+    const x = x0 + i * (bw + gap);
+    let y = H;
+    for (const [seg, color] of segs) {
+      const h = ((t[seg] || 0) / maxMs) * H;
+      y -= h;
+      ctx.fillStyle = color;
+      ctx.fillRect(x, y, bw, h);
+    }
+    const total = (t.ttft || 0) + (t.gen || 0) + (t.tts || 0);
     ctx.fillStyle = '#e6e9ef';
     ctx.font = '10px system-ui';
-    ctx.fillText(Math.round(v), x, y - 4);
+    ctx.fillText(Math.round(total), x, y - 4);
   });
 }
 
@@ -123,12 +148,14 @@ function onServerEvent(e) {
       setSession('listening');
       break;
     case 'metrics.latency':
-      if (typeof e.metrics.endToEndTurnMs === 'number') {
-        latencies.push(e.metrics.endToEndTurnMs);
-        turns += 1;
-        $('d-turns').textContent = turns;
-        drawChart();
-      }
+      turnBars.push({
+        ttft: e.metrics.llmTtftMs || 0,
+        gen: e.metrics.llmGenMs || 0,
+        tts: e.metrics.ttsMs || 0,
+      });
+      turns += 1;
+      $('d-turns').textContent = turns;
+      drawChart();
       break;
   }
 }

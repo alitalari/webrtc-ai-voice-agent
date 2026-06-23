@@ -66,7 +66,7 @@ async function handleSession(req: IncomingMessage, res: ServerResponse): Promise
           }),
     },
     // speechOnsetMs: require sustained speech to open a turn (filters brief noise).
-    endpointer: { silenceThresholdMs: 450, speechOnsetMs: 150 },
+    endpointer: { silenceThresholdMs: 600, speechOnsetMs: 150 },
     onTiming: (t) => {
       const ms = (n: number) => `${Math.round(n)}ms`;
       console.log(

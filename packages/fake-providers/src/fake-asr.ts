@@ -72,6 +72,10 @@ export class FakeASRAdapter implements ASRAdapter {
     this.chunks = 0;
   }
 
+  endUtterance(): void {
+    this.chunks = 0; // restart counting for the next turn
+  }
+
   onPartialTranscript(callback: (text: string) => void): void {
     this.partialCb = callback;
   }
