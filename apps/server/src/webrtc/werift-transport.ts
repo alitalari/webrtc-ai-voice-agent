@@ -37,7 +37,7 @@ export class WeriftServerTransport implements ServerTransport {
 
   private readonly decoder = new OpusScript(SAMPLE_RATE, CHANNELS);
   private readonly encoder = new OpusScript(SAMPLE_RATE, CHANNELS);
-  private readonly vad = new EnergyVad();
+  private readonly vad: EnergyVad;
   private readonly gate = new VadGate();
   private vadClockMs = 0;
   private lastSpeech = false;
@@ -48,7 +48,10 @@ export class WeriftServerTransport implements ServerTransport {
   constructor(
     private readonly pc: RTCPeerConnection,
     private readonly outgoingAudio: MediaStreamTrack,
+    vadThreshold?: number,
   ) {
+    this.vad = new EnergyVad({ threshold: vadThreshold });
+
     pc.onDataChannel.subscribe((channel) => {
       if (channel.label !== 'control') return;
       this.control = channel;
@@ -188,7 +191,10 @@ export interface WeriftSession {
 }
 
 /** Build a peer connection from a browser offer and return the answer + transport. */
-export async function createWeriftSession(offerSdp: string): Promise<WeriftSession> {
+export async function createWeriftSession(
+  offerSdp: string,
+  vadThreshold?: number,
+): Promise<WeriftSession> {
   const pc = new RTCPeerConnection({
     codecs: {
       audio: [
@@ -206,7 +212,7 @@ export async function createWeriftSession(offerSdp: string): Promise<WeriftSessi
   const transceiver = pc.addTransceiver('audio', { direction: 'sendrecv' });
   await transceiver.sender.replaceTrack(outgoingAudio);
 
-  const transport = new WeriftServerTransport(pc, outgoingAudio);
+  const transport = new WeriftServerTransport(pc, outgoingAudio, vadThreshold);
 
   await pc.setRemoteDescription({ type: 'offer', sdp: offerSdp });
   const answer = await pc.createAnswer();

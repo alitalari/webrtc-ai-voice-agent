@@ -32,6 +32,7 @@ interface DeepgramResults {
  */
 export class DeepgramASRAdapter implements ASRAdapter {
   private ws: WebSocket | undefined;
+  private keepAlive: ReturnType<typeof setInterval> | undefined;
   private partialCb: ((text: string) => void) | undefined;
   private finalCb: ((text: string) => void) | undefined;
   private utterance = '';
@@ -59,9 +60,18 @@ export class DeepgramASRAdapter implements ASRAdapter {
       'token',
       this.apiKey,
     ]);
+    ws.onopen = () => console.log('[deepgram] connected');
     ws.onmessage = (e) => this.onMessage(e);
     ws.onerror = () => console.error('[deepgram] websocket error');
+    ws.onclose = (e) => console.log(`[deepgram] closed (code ${e.code}${e.reason ? `: ${e.reason}` : ''})`);
     this.ws = ws;
+
+    // Deepgram closes the socket after ~10s without audio; keep it alive between
+    // turns (we only stream speech frames, so silences would otherwise time out).
+    this.keepAlive = setInterval(() => {
+      if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'KeepAlive' }));
+    }, 5000);
+
     this.sessions += 1;
     return { id: `deepgram-${this.sessions}` };
   }
@@ -74,6 +84,8 @@ export class DeepgramASRAdapter implements ASRAdapter {
   }
 
   async stopSession(): Promise<void> {
+    if (this.keepAlive) clearInterval(this.keepAlive);
+    this.keepAlive = undefined;
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify({ type: 'CloseStream' }));
       this.ws.close();
@@ -104,9 +116,11 @@ export class DeepgramASRAdapter implements ASRAdapter {
 
     if (msg.is_final) {
       this.utterance = `${this.utterance} ${text}`.trim();
+      console.log(`[asr] final${msg.speech_final ? ' (speech_final)' : ''}: "${this.utterance}"`);
       this.finalCb?.(this.utterance);
       if (msg.speech_final) this.utterance = ''; // end of utterance → start fresh
     } else {
+      console.log(`[asr] partial: "${`${this.utterance} ${text}`.trim()}"`);
       this.partialCb?.(`${this.utterance} ${text}`.trim());
     }
   }

@@ -39,7 +39,7 @@ async function handleSession(req: IncomingMessage, res: ServerResponse): Promise
   const { offer } = JSON.parse(await readBody(req)) as { offer: string };
   const sessionId = `s-${++sessionCounter}`;
 
-  const { answerSdp, transport } = await createWeriftSession(offer);
+  const { answerSdp, transport } = await createWeriftSession(offer, config.vadThreshold);
   // Dev wiring: fake providers, given *realistic* latency so the demo's timing
   // and latency chart feel like a real voice agent (real providers swap in at
   // Phase 3). Real server-side VAD drives turns; fake TTS is a ~1s 48kHz tone
@@ -62,7 +62,8 @@ async function handleSession(req: IncomingMessage, res: ServerResponse): Promise
             sleep: (i) => delay(i === 0 ? 120 : 20), // ~120ms to first audio byte
           }),
     },
-    endpointer: { silenceThresholdMs: 600 },
+    // speechOnsetMs: require sustained speech to open a turn (filters brief noise).
+    endpointer: { silenceThresholdMs: 600, speechOnsetMs: 150 },
   });
 
   res.writeHead(200, { 'content-type': 'application/json' });

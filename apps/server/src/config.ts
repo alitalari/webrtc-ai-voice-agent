@@ -8,6 +8,7 @@ export interface ServerConfig {
   deepgramApiKey?: string;
   cartesiaApiKey?: string;
   cartesiaVoiceId: string;
+  vadThreshold: number;
 }
 
 /**
@@ -33,5 +34,8 @@ export function loadConfig(): ServerConfig {
     // A Cartesia voice UUID. Override with CARTESIA_VOICE_ID (pick one from your
     // Cartesia dashboard) if the default isn't available on your account.
     cartesiaVoiceId: process.env.CARTESIA_VOICE_ID ?? 'a0e99841-438c-4a64-b679-ae501e7d6091',
+    // Energy VAD threshold (0..1 RMS). Raise for noisy rooms, lower if your voice
+    // isn't detected. Tune via VAD_THRESHOLD.
+    vadThreshold: Number(process.env.VAD_THRESHOLD ?? 0.03),
   };
 }
