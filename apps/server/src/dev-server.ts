@@ -6,6 +6,10 @@ import { FakeASRAdapter, FakeModelAdapter, FakeTTSAdapter } from '@voice/fake-pr
 import { createSession } from '@voice/orchestrator';
 import { PROTOCOL_VERSION } from '@voice/protocol';
 import { createWeriftSession } from './webrtc/werift-transport.js';
+import { loadConfig } from './config.js';
+import { ClaudeModelAdapter } from './providers/claude.js';
+
+const config = loadConfig();
 
 const here = dirname(fileURLToPath(import.meta.url));
 const publicDir = join(here, '..', 'public');
@@ -43,7 +47,9 @@ async function handleSession(req: IncomingMessage, res: ServerResponse): Promise
     transport,
     adapters: {
       asr: new FakeASRAdapter({ repeat: true, partialAfter: 8, finalAfter: 26 }),
-      model: new FakeModelAdapter({ sleep: (i) => delay(i === 0 ? 300 : 20) }), // ~300ms to first token
+      model: config.anthropicApiKey
+        ? new ClaudeModelAdapter({ apiKey: config.anthropicApiKey, model: config.anthropicModel })
+        : new FakeModelAdapter({ sleep: (i) => delay(i === 0 ? 300 : 20) }), // ~300ms to first token
       tts: new FakeTTSAdapter({
         sampleRate: 48000,
         chunkCount: 50,
@@ -69,7 +75,7 @@ async function serveStatic(req: IncomingMessage, res: ServerResponse): Promise<v
   }
 }
 
-export function startDevServer(port = 8080): void {
+export function startDevServer(): void {
   const server = createServer((req, res) => {
     void (async () => {
       try {
@@ -85,7 +91,9 @@ export function startDevServer(port = 8080): void {
     })();
   });
 
-  server.listen(port, () => {
-    console.log(`@voice/server dev server on http://localhost:${port} (protocol v${PROTOCOL_VERSION})`);
+  server.listen(config.port, () => {
+    const llm = config.anthropicApiKey ? `Claude (${config.anthropicModel})` : 'fake';
+    console.log(`@voice/server dev server on http://localhost:${config.port} (protocol v${PROTOCOL_VERSION})`);
+    console.log(`providers — ASR: fake · LLM: ${llm} · TTS: fake`);
   });
 }

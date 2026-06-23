@@ -1,9 +1,8 @@
 import { startDevServer } from './dev-server.js';
 
 /**
- * Reference backend entry point. Milestone 1 of the real WebRTC media path:
- * signaling + a werift peer that echoes audio and carries control events.
+ * Reference backend entry point. Real WebRTC media path + session orchestration.
+ * Providers are real when their keys are present in apps/server/.env, else fake.
  * See docs/architecture.md → Stack & Runtime Decision.
  */
-const port = Number(process.env.PORT ?? 8080);
-startDevServer(port);
+startDevServer();

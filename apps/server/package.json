@@ -9,6 +9,9 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.105.0",
+    "@cartesia/cartesia-js": "^3.2.0",
+    "@deepgram/sdk": "^5.4.0",
     "@voice/fake-providers": "*",
     "@voice/media": "*",
     "@voice/orchestrator": "*",
