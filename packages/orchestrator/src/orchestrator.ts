@@ -194,62 +194,79 @@ export class SessionOrchestrator {
 
     this.responseTask = (async () => {
       try {
-      // Accumulate the model's text, then synthesize. Sentence-level pipelining
-      // for lower latency is a Phase 3 refinement; the cancellation contract is
-      // identical either way.
+      // Stream the model and synthesize each sentence the moment it's complete,
+      // so audio starts at the first sentence instead of after the whole reply.
       let assistantText = '';
+      let pending = '';
       let firstTokenAt = 0;
-      for await (const out of this.adapters.model.generateResponse({
-        messages: this.history,
-      })) {
+      let firstSentenceAt = 0;
+      let started = false;
+
+      // Synthesize one sentence and stream its audio. Returns false if cancelled.
+      const speak = async (sentence: string): Promise<boolean> => {
+        for await (const audio of this.adapters.tts.synthesizeStream({ text: sentence })) {
+          if (gen !== this.responseGeneration) return false;
+          if (!started) {
+            started = true;
+            const firstAudioAtMs = this.now();
+            this.apply({ type: 'agentResponseStarted' }); // thinking → speaking
+            this.emit({ type: 'agent.response.started', sessionId: this.sessionId });
+
+            const metrics: LatencyMetrics = {
+              endToEndTurnMs: firstAudioAtMs - endpointAtMs,
+              llmTtftMs: firstTokenAt - endpointAtMs,
+              llmGenMs: firstSentenceAt - firstTokenAt, // → first *sentence* ready
+              ttsMs: firstAudioAtMs - firstSentenceAt,
+            };
+            if (finalAtMs > 0) metrics.timeToFirstAudioByteMs = firstAudioAtMs - finalAtMs;
+            this.emit({ type: 'metrics.latency', sessionId: this.sessionId, metrics });
+
+            this.onTiming?.({
+              transcript: userText,
+              talkMs: endpointAtMs - speechStartedAt,
+              asrMs: finalAtMs > 0 ? finalAtMs - speechStartedAt : null,
+              llmTtftMs: firstTokenAt - endpointAtMs,
+              llmGenMs: firstSentenceAt - firstTokenAt,
+              ttsMs: firstAudioAtMs - firstSentenceAt,
+              endToEndMs: firstAudioAtMs - speechStartedAt,
+            });
+          }
+          this.onAudio(audio);
+          this.emit({
+            type: 'agent.response.audio',
+            sessionId: this.sessionId,
+            audioChunkId: `chunk-${this.audioChunkSeq++}`,
+          });
+        }
+        // The stream can also end because cancel() closed it (barge-in) — report
+        // that so the turn doesn't fall through to "completed".
+        return gen === this.responseGeneration;
+      };
+
+      // Surface the sentence text (for in-sync display), then speak it.
+      const flush = async (sentence: string): Promise<boolean> => {
+        if (firstSentenceAt === 0) firstSentenceAt = this.now();
+        this.emit({ type: 'agent.response.text', sessionId: this.sessionId, text: sentence });
+        return speak(sentence);
+      };
+
+      for await (const out of this.adapters.model.generateResponse({ messages: this.history })) {
         if (gen !== this.responseGeneration) return; // cancelled (barge-in / stop)
         if (firstTokenAt === 0) firstTokenAt = this.now();
         assistantText += out.textDelta;
-      }
-      if (gen !== this.responseGeneration) return;
-      const modelDoneAt = this.now();
+        pending += out.textDelta;
 
-      // The full reply is known before TTS starts — surface it for display.
-      this.emit({ type: 'agent.response.text', sessionId: this.sessionId, text: assistantText });
-
-      let started = false;
-      for await (const audio of this.adapters.tts.synthesizeStream({ text: assistantText })) {
-        if (gen !== this.responseGeneration) return;
-        if (!started) {
-          started = true;
-          this.apply({ type: 'agentResponseStarted' }); // thinking → speaking
-          this.emit({ type: 'agent.response.started', sessionId: this.sessionId });
-          const firstAudioAtMs = this.now();
-          const metrics: LatencyMetrics = {
-            endToEndTurnMs: firstAudioAtMs - endpointAtMs,
-            llmTtftMs: firstTokenAt - endpointAtMs,
-            llmGenMs: modelDoneAt - firstTokenAt,
-            ttsMs: firstAudioAtMs - modelDoneAt,
-          };
-          // Only meaningful once ASR has produced a final transcript this turn.
-          if (finalAtMs > 0) {
-            metrics.timeToFirstAudioByteMs = firstAudioAtMs - finalAtMs;
-          }
-          this.emit({ type: 'metrics.latency', sessionId: this.sessionId, metrics });
-
-          this.onTiming?.({
-            transcript: userText,
-            talkMs: endpointAtMs - speechStartedAt,
-            asrMs: finalAtMs > 0 ? finalAtMs - speechStartedAt : null,
-            llmTtftMs: firstTokenAt - endpointAtMs,
-            llmGenMs: modelDoneAt - firstTokenAt,
-            ttsMs: firstAudioAtMs - modelDoneAt,
-            endToEndMs: firstAudioAtMs - speechStartedAt,
-          });
+        let idx: number;
+        while ((idx = sentenceEnd(pending)) !== -1) {
+          const sentence = pending.slice(0, idx + 1).trim();
+          pending = pending.slice(idx + 1);
+          if (sentence && !(await flush(sentence))) return;
         }
-        this.onAudio(audio);
-        this.emit({
-          type: 'agent.response.audio',
-          sessionId: this.sessionId,
-          audioChunkId: `chunk-${this.audioChunkSeq++}`,
-        });
       }
       if (gen !== this.responseGeneration) return;
+
+      const rest = pending.trim();
+      if (rest && !(await flush(rest))) return;
 
       this.history.push({ role: 'assistant', content: assistantText });
       this.trimHistory();
@@ -280,6 +297,20 @@ export class SessionOrchestrator {
   private emit(event: ServerEvent): void {
     this.onEvent(event);
   }
+}
+
+/** Index of the first sentence-ending punctuation in `text`, or -1. */
+function sentenceEnd(text: string): number {
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (c === '!' || c === '?') return i;
+    if (c === '.') {
+      const next = text[i + 1];
+      if (next && next >= '0' && next <= '9') continue; // decimal like 3.14
+      return i;
+    }
+  }
+  return -1;
 }
 
 function mapTurnEvent(turn: TurnEvent): SessionEvent | null {

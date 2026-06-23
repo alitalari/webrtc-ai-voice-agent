@@ -16,6 +16,7 @@ let localStream;
 const turnBars = []; // each: { ttft, gen, tts }
 let turns = 0;
 let partialEl = null;
+let agentEl = null;
 
 const sendEvent = (payload) => control.send(JSON.stringify({ kind: 'event', payload }));
 const sendConfig = (payload) => control && control.send(JSON.stringify({ kind: 'config', payload }));
@@ -136,12 +137,21 @@ function onServerEvent(e) {
       commitLine('you', e.text, '#4f8cff');
       break;
     case 'agent.response.text':
-      commitLine('agent', e.text, '#3ad29f');
+      // Sentences stream in; append them to one agent line for the turn.
+      if (!agentEl) {
+        agentEl = document.createElement('div');
+        agentEl.className = 'final';
+        agentEl.innerHTML = '<b style="color:#3ad29f">agent:</b> ';
+        $('transcript').appendChild(agentEl);
+      }
+      agentEl.appendChild(document.createTextNode(e.text + ' '));
+      $('transcript').scrollTop = $('transcript').scrollHeight;
       break;
     case 'agent.response.started':
       setSession('speaking');
       break;
     case 'agent.response.completed':
+      agentEl = null; // next turn starts a fresh agent line
       setSession('listening');
       break;
     case 'agent.interrupted':
