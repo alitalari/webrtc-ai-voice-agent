@@ -8,6 +8,7 @@ import { PROTOCOL_VERSION } from '@voice/protocol';
 import { createWeriftSession } from './webrtc/werift-transport.js';
 import { loadConfig } from './config.js';
 import { ClaudeModelAdapter } from './providers/claude.js';
+import { DeepgramASRAdapter } from './providers/deepgram.js';
 
 const config = loadConfig();
 
@@ -46,7 +47,9 @@ async function handleSession(req: IncomingMessage, res: ServerResponse): Promise
     sessionId,
     transport,
     adapters: {
-      asr: new FakeASRAdapter({ repeat: true, partialAfter: 8, finalAfter: 26 }),
+      asr: config.deepgramApiKey
+        ? new DeepgramASRAdapter({ apiKey: config.deepgramApiKey })
+        : new FakeASRAdapter({ repeat: true, partialAfter: 8, finalAfter: 26 }),
       model: config.anthropicApiKey
         ? new ClaudeModelAdapter({ apiKey: config.anthropicApiKey, model: config.anthropicModel })
         : new FakeModelAdapter({ sleep: (i) => delay(i === 0 ? 300 : 20) }), // ~300ms to first token
@@ -92,8 +95,9 @@ export function startDevServer(): void {
   });
 
   server.listen(config.port, () => {
+    const asr = config.deepgramApiKey ? 'Deepgram' : 'fake';
     const llm = config.anthropicApiKey ? `Claude (${config.anthropicModel})` : 'fake';
     console.log(`@voice/server dev server on http://localhost:${config.port} (protocol v${PROTOCOL_VERSION})`);
-    console.log(`providers — ASR: fake · LLM: ${llm} · TTS: fake`);
+    console.log(`providers — ASR: ${asr} · LLM: ${llm} · TTS: fake`);
   });
 }
