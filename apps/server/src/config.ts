@@ -7,6 +7,7 @@ export interface ServerConfig {
   anthropicModel: string;
   deepgramApiKey?: string;
   cartesiaApiKey?: string;
+  cartesiaVoiceId: string;
 }
 
 /**
@@ -29,5 +30,8 @@ export function loadConfig(): ServerConfig {
     anthropicModel: process.env.ANTHROPIC_MODEL ?? 'claude-haiku-4-5',
     deepgramApiKey: process.env.DEEPGRAM_API_KEY,
     cartesiaApiKey: process.env.CARTESIA_API_KEY,
+    // A Cartesia voice UUID. Override with CARTESIA_VOICE_ID (pick one from your
+    // Cartesia dashboard) if the default isn't available on your account.
+    cartesiaVoiceId: process.env.CARTESIA_VOICE_ID ?? 'a0e99841-438c-4a64-b679-ae501e7d6091',
   };
 }
