@@ -17,6 +17,7 @@ const turnBars = []; // each: { ttft, gen, tts }
 let turns = 0;
 let partialEl = null;
 let agentEl = null;
+let muted = false;
 
 const sendEvent = (payload) => control.send(JSON.stringify({ kind: 'event', payload }));
 const sendConfig = (payload) => control && control.send(JSON.stringify({ kind: 'config', payload }));
@@ -37,6 +38,11 @@ function setConnectedUi(on) {
   $('connect').textContent = on ? 'Disconnect' : 'Connect';
   $('connect').disabled = false;
   $('interrupt').disabled = !on;
+  $('mute').disabled = !on;
+  if (!on) {
+    muted = false;
+    $('mute').textContent = 'Mute';
+  }
 }
 
 // --- transcript ---
@@ -246,6 +252,14 @@ $('connect').onclick = () => {
 $('interrupt').onclick = () => {
   sendEvent({ type: 'agent.interrupt', sessionId, reason: 'manual' });
   log('➡ agent.interrupt');
+};
+
+$('mute').onclick = () => {
+  if (!localStream) return;
+  muted = !muted;
+  for (const t of localStream.getAudioTracks()) t.enabled = !muted; // muted track sends silence
+  $('mute').textContent = muted ? 'Unmute' : 'Mute';
+  log(muted ? 'muted' : 'unmuted');
 };
 
 for (const id of ['asr', 'llm', 'tts']) {
