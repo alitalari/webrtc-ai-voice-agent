@@ -1,5 +1,5 @@
 import type { EndpointerConfig } from '@voice/session';
-import { SessionOrchestrator, type OrchestratorAdapters } from './orchestrator.js';
+import { SessionOrchestrator, type OrchestratorAdapters, type TurnTiming } from './orchestrator.js';
 import type { ServerTransport } from './transport.js';
 
 export interface CreateSessionOptions {
@@ -7,6 +7,7 @@ export interface CreateSessionOptions {
   transport: ServerTransport;
   adapters: OrchestratorAdapters;
   endpointer: EndpointerConfig;
+  onTiming?: (timing: TurnTiming) => void;
 }
 
 /**
@@ -22,6 +23,7 @@ export function createSession(options: CreateSessionOptions): SessionOrchestrato
     endpointer: options.endpointer,
     onEvent: (event) => options.transport.sendEvent(event),
     onAudio: (chunk) => options.transport.sendAudio(chunk),
+    onTiming: options.onTiming,
   });
 
   options.transport.onClientEvent((event) => {

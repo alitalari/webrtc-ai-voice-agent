@@ -32,6 +32,19 @@ export interface OrchestratorOptions {
   onAudio: (chunk: AudioChunk) => void;
   /** Monotonic clock in ms. Injected for deterministic tests; defaults to Date.now. */
   now?: () => number;
+  /** Optional per-turn latency breakdown, for debugging end-to-end delay. */
+  onTiming?: (timing: TurnTiming) => void;
+}
+
+/** Per-turn latency segments (all ms). Reported when the agent's first audio is ready. */
+export interface TurnTiming {
+  transcript: string;
+  talkMs: number; // user speech start → endpoint (talking + silence wait)
+  asrMs: number | null; // user speech start → ASR final transcript
+  llmTtftMs: number; // endpoint → first LLM token
+  llmGenMs: number; // first LLM token → model done
+  ttsMs: number; // model done → first audio byte
+  endToEndMs: number; // user speech start → first audio (full perceived latency)
 }
 
 /**
@@ -50,11 +63,13 @@ export class SessionOrchestrator {
   private readonly onEvent: (event: ServerEvent) => void;
   private readonly onAudio: (chunk: AudioChunk) => void;
   private readonly now: () => number;
+  private readonly onTiming: ((timing: TurnTiming) => void) | undefined;
 
   private readonly history: ModelMessage[] = [];
   private lastFinal = '';
   private lastFinalAtMs = 0;
   private lastPartial = '';
+  private turnSpeechStartedAt = 0;
   private responseGeneration = 0;
   private responseTask: Promise<void> = Promise.resolve();
   private audioChunkSeq = 0;
@@ -66,6 +81,7 @@ export class SessionOrchestrator {
     this.onEvent = options.onEvent;
     this.onAudio = options.onAudio;
     this.now = options.now ?? (() => Date.now());
+    this.onTiming = options.onTiming;
 
     this.adapters.asr.onPartialTranscript((text) => {
       this.lastPartial = text;
@@ -123,6 +139,9 @@ export class SessionOrchestrator {
     const prev = this.machine.state;
     const effects = this.machine.dispatch(event);
     this.executeEffects(effects);
+    if (prev === 'listening' && this.machine.state === 'userSpeaking') {
+      this.turnSpeechStartedAt = this.now(); // start of a fresh user turn
+    }
     if (this.machine.state === 'thinking' && prev !== 'thinking') {
       this.beginResponse();
     }
@@ -153,6 +172,7 @@ export class SessionOrchestrator {
   private beginResponse(): void {
     const gen = ++this.responseGeneration;
     const endpointAtMs = this.now(); // end-of-turn decision time
+    const speechStartedAt = this.turnSpeechStartedAt || endpointAtMs;
     const userText = (this.lastFinal || this.lastPartial).trim();
     const finalAtMs = this.lastFinalAtMs;
     // Consume the transcript so a later turn (e.g. a noise blip while silent)
@@ -177,13 +197,16 @@ export class SessionOrchestrator {
       // for lower latency is a Phase 3 refinement; the cancellation contract is
       // identical either way.
       let assistantText = '';
+      let firstTokenAt = 0;
       for await (const out of this.adapters.model.generateResponse({
         messages: this.history,
       })) {
         if (gen !== this.responseGeneration) return; // cancelled (barge-in / stop)
+        if (firstTokenAt === 0) firstTokenAt = this.now();
         assistantText += out.textDelta;
       }
       if (gen !== this.responseGeneration) return;
+      const modelDoneAt = this.now();
 
       // The full reply is known before TTS starts — surface it for display.
       this.emit({ type: 'agent.response.text', sessionId: this.sessionId, text: assistantText });
@@ -202,6 +225,16 @@ export class SessionOrchestrator {
             metrics.timeToFirstAudioByteMs = firstAudioAtMs - finalAtMs;
           }
           this.emit({ type: 'metrics.latency', sessionId: this.sessionId, metrics });
+
+          this.onTiming?.({
+            transcript: userText,
+            talkMs: endpointAtMs - speechStartedAt,
+            asrMs: finalAtMs > 0 ? finalAtMs - speechStartedAt : null,
+            llmTtftMs: firstTokenAt - endpointAtMs,
+            llmGenMs: modelDoneAt - firstTokenAt,
+            ttsMs: firstAudioAtMs - modelDoneAt,
+            endToEndMs: firstAudioAtMs - speechStartedAt,
+          });
         }
         this.onAudio(audio);
         this.emit({

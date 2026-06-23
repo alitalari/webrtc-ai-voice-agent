@@ -64,6 +64,14 @@ async function handleSession(req: IncomingMessage, res: ServerResponse): Promise
     },
     // speechOnsetMs: require sustained speech to open a turn (filters brief noise).
     endpointer: { silenceThresholdMs: 600, speechOnsetMs: 150 },
+    onTiming: (t) => {
+      const ms = (n: number) => `${Math.round(n)}ms`;
+      console.log(
+        `[turn] e2e=${ms(t.endToEndMs)} | talk=${ms(t.talkMs)} ` +
+          `asr=${t.asrMs === null ? '—' : ms(t.asrMs)} ` +
+          `llm_ttft=${ms(t.llmTtftMs)} llm_gen=${ms(t.llmGenMs)} tts=${ms(t.ttsMs)} | "${t.transcript}"`,
+      );
+    },
   });
 
   res.writeHead(200, { 'content-type': 'application/json' });
