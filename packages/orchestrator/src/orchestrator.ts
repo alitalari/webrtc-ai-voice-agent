@@ -5,7 +5,7 @@ import type {
   ModelMessage,
   TTSAdapter,
 } from '@voice/provider-interfaces';
-import type { ServerEvent, TurnEvent } from '@voice/protocol';
+import type { LatencyMetrics, ServerEvent, TurnEvent } from '@voice/protocol';
 import {
   Endpointer,
   SessionMachine,
@@ -177,14 +177,12 @@ export class SessionOrchestrator {
           this.apply({ type: 'agentResponseStarted' }); // thinking → speaking
           this.emit({ type: 'agent.response.started', sessionId: this.sessionId });
           const firstAudioAtMs = this.now();
-          this.emit({
-            type: 'metrics.latency',
-            sessionId: this.sessionId,
-            metrics: {
-              timeToFirstAudioByteMs: firstAudioAtMs - this.lastFinalAtMs,
-              endToEndTurnMs: firstAudioAtMs - endpointAtMs,
-            },
-          });
+          const metrics: LatencyMetrics = { endToEndTurnMs: firstAudioAtMs - endpointAtMs };
+          // Only meaningful once ASR has produced a final transcript this turn.
+          if (this.lastFinalAtMs > 0) {
+            metrics.timeToFirstAudioByteMs = firstAudioAtMs - this.lastFinalAtMs;
+          }
+          this.emit({ type: 'metrics.latency', sessionId: this.sessionId, metrics });
         }
         this.onAudio(audio);
         this.emit({

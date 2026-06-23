@@ -89,6 +89,36 @@ describe('SessionOrchestrator — latency metrics', () => {
       expect(metric.metrics.endToEndTurnMs).toBe(10);
     }
   });
+
+  it('omits timeToFirstAudioByteMs when there was no final transcript', async () => {
+    let t = 0;
+    const now = () => (t += 10);
+    const asr = new FakeASRAdapter();
+    const events: ServerEvent[] = [];
+    const orch = new SessionOrchestrator({
+      sessionId: 's1',
+      adapters: { asr, model: new FakeModelAdapter({ script: ['Hi'] }), tts: new FakeTTSAdapter({ chunkCount: 1 }) },
+      endpointer: { silenceThresholdMs: 100 },
+      onEvent: (e) => events.push(e),
+      onAudio: () => {},
+      now,
+    });
+
+    await orch.start();
+    orch.pushVad({ speech: true, timestampMs: 0 });
+    // NO emitFinal — there is no ASR transcript this turn.
+    for (let ts = 20; ts <= 140; ts += 20) orch.pushVad({ speech: false, timestampMs: ts });
+    await orch.whenResponseSettled();
+
+    const metric = events.find((e) => e.type === 'metrics.latency');
+    expect(metric).toBeDefined();
+    if (metric?.type === 'metrics.latency') {
+      // WHY: without a transcript, "final → first audio" is undefined garbage
+      // (the bug that showed 1.78e12 in the browser). End-to-end still holds.
+      expect(metric.metrics.endToEndTurnMs).toBeDefined();
+      expect(metric.metrics.timeToFirstAudioByteMs).toBeUndefined();
+    }
+  });
 });
 
 describe('SessionOrchestrator — barge-in cancellation contract', () => {

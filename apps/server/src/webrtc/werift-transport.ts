@@ -5,7 +5,7 @@ import {
   type RTCDataChannel,
 } from 'werift';
 import OpusScript from 'opusscript';
-import { EnergyVad } from '@voice/media';
+import { EnergyVad, VadGate } from '@voice/media';
 import type { ServerTransport } from '@voice/orchestrator';
 import type { ClientEvent, ServerEvent } from '@voice/protocol';
 import type { AudioChunk } from '@voice/provider-interfaces';
@@ -38,6 +38,7 @@ export class WeriftServerTransport implements ServerTransport {
 
   private readonly decoder = new OpusScript(SAMPLE_RATE, CHANNELS);
   private readonly vad = new EnergyVad();
+  private readonly gate = new VadGate();
   private vadClockMs = 0;
   private lastSpeech = false;
 
@@ -73,7 +74,7 @@ export class WeriftServerTransport implements ServerTransport {
     // 48 samples == 1ms at 48kHz; advance the audio-timeline clock.
     this.vadClockMs += mono.length / (SAMPLE_RATE / 1000);
 
-    const speech = this.vad.isSpeech(mono);
+    const speech = this.gate.step(this.vad.isSpeech(mono), this.vadClockMs);
     if (speech !== this.lastSpeech) {
       this.lastSpeech = speech;
       // Server-terminal readout so VAD activity is visible while tuning.
