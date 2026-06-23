@@ -189,10 +189,18 @@ export interface WeriftSession {
   pc: RTCPeerConnection;
 }
 
+export interface WeriftSessionOptions {
+  vadThreshold?: number;
+  /** Announce this public IP as a host candidate (required off localhost). */
+  publicIp?: string;
+  /** Fixed UDP port range for media, so it can be firewalled. */
+  icePortRange?: [number, number];
+}
+
 /** Build a peer connection from a browser offer and return the answer + transport. */
 export async function createWeriftSession(
   offerSdp: string,
-  vadThreshold?: number,
+  options: WeriftSessionOptions = {},
 ): Promise<WeriftSession> {
   const pc = new RTCPeerConnection({
     codecs: {
@@ -205,13 +213,15 @@ export async function createWeriftSession(
         }),
       ],
     },
+    ...(options.icePortRange ? { icePortRange: options.icePortRange } : {}),
+    ...(options.publicIp ? { iceAdditionalHostAddresses: [options.publicIp] } : {}),
   });
 
   const outgoingAudio = new MediaStreamTrack({ kind: 'audio' });
   const transceiver = pc.addTransceiver('audio', { direction: 'sendrecv' });
   await transceiver.sender.replaceTrack(outgoingAudio);
 
-  const transport = new WeriftServerTransport(pc, outgoingAudio, vadThreshold);
+  const transport = new WeriftServerTransport(pc, outgoingAudio, options.vadThreshold);
 
   await pc.setRemoteDescription({ type: 'offer', sdp: offerSdp });
   const answer = await pc.createAnswer();

@@ -39,7 +39,11 @@ async function handleSession(req: IncomingMessage, res: ServerResponse): Promise
   const { offer } = JSON.parse(await readBody(req)) as { offer: string };
   const sessionId = `s-${++sessionCounter}`;
 
-  const { answerSdp, transport } = await createWeriftSession(offer, config.vadThreshold);
+  const { answerSdp, transport } = await createWeriftSession(offer, {
+    vadThreshold: config.vadThreshold,
+    publicIp: config.publicIp,
+    icePortRange: config.icePortRange,
+  });
 
   const model = config.anthropicApiKey
     ? new ClaudeModelAdapter({ apiKey: config.anthropicApiKey, model: config.anthropicModel })

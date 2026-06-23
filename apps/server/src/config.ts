@@ -9,6 +9,10 @@ export interface ServerConfig {
   cartesiaApiKey?: string;
   cartesiaVoiceId: string;
   vadThreshold: number;
+  /** Public IP to announce as a WebRTC host candidate (needed off localhost). */
+  publicIp?: string;
+  /** Fixed UDP range for WebRTC media, so it can be firewalled. */
+  icePortRange?: [number, number];
 }
 
 /**
@@ -37,5 +41,10 @@ export function loadConfig(): ServerConfig {
     // Energy VAD threshold (0..1 RMS). Raise for noisy rooms, lower if your voice
     // isn't detected. Tune via VAD_THRESHOLD.
     vadThreshold: Number(process.env.VAD_THRESHOLD ?? 0.03),
+    publicIp: process.env.PUBLIC_IP,
+    icePortRange:
+      process.env.ICE_UDP_MIN && process.env.ICE_UDP_MAX
+        ? [Number(process.env.ICE_UDP_MIN), Number(process.env.ICE_UDP_MAX)]
+        : undefined,
   };
 }
