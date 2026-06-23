@@ -5,6 +5,7 @@
     { "path": "packages/protocol" },
     { "path": "packages/provider-interfaces" },
     { "path": "packages/session" },
+    { "path": "packages/media" },
     { "path": "packages/fake-providers" },
     { "path": "packages/orchestrator" },
     { "path": "packages/web-sdk" },
