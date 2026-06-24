@@ -182,7 +182,15 @@ async function connect() {
   $('connect').disabled = true;
 
   localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-  pc = new RTCPeerConnection();
+  // STUN lets the client discover its public (srflx) address so the server can
+  // route media back — without it, mobile/cellular NAT makes ICE crawl for
+  // seconds before finding a path.
+  pc = new RTCPeerConnection({
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+    ],
+  });
   for (const track of localStream.getAudioTracks()) pc.addTrack(track, localStream);
 
   pc.ontrack = (e) => {
