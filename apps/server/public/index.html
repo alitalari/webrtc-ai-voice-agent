@@ -51,15 +51,7 @@
       #chart { width: 100%; height: 220px; display: block; }
       .chart-hint { color: var(--muted); font-size: 12px; margin-top: 6px; }
 
-      details.setup { border-top: 1px solid var(--border); }
-      details.setup > summary {
-        list-style: none; cursor: pointer; padding: 12px 18px; color: var(--muted);
-        font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em;
-      }
-      details.setup > summary::-webkit-details-marker { display: none; }
-      details.setup > summary::before { content: '▸ '; }
-      details.setup[open] > summary::before { content: '▾ '; }
-      .setup-body { padding: 0 18px 14px; }
+      #panel-debug { overflow: auto; }
       .field { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
       .field label { color: var(--muted); font-size: 12px; width: 42px; }
       select { flex: 1; font: inherit; padding: 7px 8px; border-radius: 8px; border: 1px solid var(--border); background: #222733; color: var(--fg); }
@@ -79,8 +71,9 @@
       /* Desktop: show transcript + latency side by side, hide the tab switcher. */
       @media (min-width: 880px) {
         .tabs { display: none; }
-        main { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        main { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-content: start; }
         .panel { display: flex !important; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 12px; }
+        #panel-debug { grid-column: 1 / -1; } /* full-width row under transcript + latency */
       }
     </style>
   </head>
@@ -97,6 +90,7 @@
       <div class="tabs">
         <button data-tab="transcript" class="active">Transcript</button>
         <button data-tab="latency">Latency</button>
+        <button data-tab="debug">Debug</button>
       </div>
 
       <main>
@@ -114,11 +108,7 @@
           <canvas id="chart" width="640" height="220"></canvas>
           <div class="chart-hint">Per-turn latency, endpoint → first audio. Dashed line = 1.1s budget.</div>
         </section>
-      </main>
-
-      <details class="setup">
-        <summary>Setup &amp; debug</summary>
-        <div class="setup-body">
+        <section class="panel" id="panel-debug">
           <div class="field"><label>ASR</label><select id="asr"><option>Deepgram</option><option>Whisper</option></select></div>
           <div class="field"><label>LLM</label><select id="llm"><option>Claude</option><option>GPT</option><option>Gemini</option></select></div>
           <div class="field"><label>TTS</label><select id="tts"><option>Cartesia</option><option>ElevenLabs</option></select></div>
@@ -130,8 +120,8 @@
           <div class="kv"><span>providers: <b id="d-prov">Deepgram · Claude · Cartesia</b></span></div>
           <div id="log"></div>
           <div class="chart-hint">Provider dropdowns are illustrative — the live stack is chosen on the server by which API keys are set.</div>
-        </div>
-      </details>
+        </section>
+      </main>
 
       <div class="controls">
         <button id="mute" class="icon" disabled title="Mute">🎙</button>

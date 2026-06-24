@@ -21,6 +21,7 @@ let agentEl = null;
 let muted = false;
 let connState = 'idle';
 let sessState = '—';
+let tConnectStart = 0;
 
 const sendEvent = (payload) => control && control.send(JSON.stringify({ kind: 'event', payload }));
 const sendConfig = (payload) => control && control.send(JSON.stringify({ kind: 'config', payload }));
@@ -196,6 +197,7 @@ async function connect() {
   $('d-turns').textContent = '0';
   setConn('connecting…');
   $('connect').disabled = true;
+  tConnectStart = performance.now();
 
   localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
   // STUN lets the client discover its public (srflx) address so the server can
@@ -214,6 +216,7 @@ async function connect() {
   };
   pc.onconnectionstatechange = () => {
     setConn(pc.connectionState);
+    if (pc.connectionState === 'connected') log(`✔ connected in ${Math.round(performance.now() - tConnectStart)}ms`);
     if (pc.connectionState === 'failed' || pc.connectionState === 'closed') disconnect();
   };
 
@@ -227,8 +230,11 @@ async function connect() {
 
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
+  const tOffer = performance.now();
   await waitIceComplete(pc);
+  log(`ice gathering: ${Math.round(performance.now() - tOffer)}ms`);
 
+  const tFetch = performance.now();
   const resp = await fetch('/session', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -237,6 +243,7 @@ async function connect() {
   const { answer, sessionId: sid } = await resp.json();
   sessionId = sid;
   await pc.setRemoteDescription({ type: 'answer', sdp: answer });
+  log(`/session + answer: ${Math.round(performance.now() - tFetch)}ms`);
 }
 
 function disconnect() {
@@ -252,12 +259,24 @@ function disconnect() {
   setConnectedUi(false);
 }
 
-function waitIceComplete(peer) {
+// Resolve once gathering is complete OR after a short cap. The server has a
+// directly reachable public candidate, so we don't need every last client
+// candidate — waiting for full "complete" can hang ~20s on mobile networks
+// that are slow to reach a STUN server. The host/srflx candidates gathered
+// within the cap are enough; connectivity finds the rest peer-reflexively.
+function waitIceComplete(peer, timeoutMs = 2500) {
   return new Promise((resolve) => {
     if (peer.iceGatheringState === 'complete') return resolve();
-    peer.addEventListener('icegatheringstatechange', () => {
-      if (peer.iceGatheringState === 'complete') resolve();
-    });
+    const onChange = () => {
+      if (peer.iceGatheringState === 'complete') finish();
+    };
+    const finish = () => {
+      clearTimeout(timer);
+      peer.removeEventListener('icegatheringstatechange', onChange);
+      resolve();
+    };
+    const timer = setTimeout(finish, timeoutMs);
+    peer.addEventListener('icegatheringstatechange', onChange);
   });
 }
 
