@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>AI Voice SDK — Demo</title>
     <style>
       :root {
@@ -10,94 +10,135 @@
         --muted: #8b93a3; --accent: #4f8cff; --green: #3ad29f; --amber: #f5a623; --red: #ff6b6b;
       }
       * { box-sizing: border-box; }
-      body { font: 14px/1.5 system-ui, sans-serif; margin: 0; background: var(--bg); color: var(--fg); }
-      header { padding: 16px 24px; border-bottom: 1px solid var(--border); }
-      h1 { font-size: 18px; margin: 0; }
-      .sub { color: var(--muted); font-size: 13px; }
-      .bar { padding: 12px 24px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; border-bottom: 1px solid var(--border); }
-      button { font: inherit; padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border); background: #222733; color: var(--fg); cursor: pointer; }
-      button:disabled { opacity: 0.5; cursor: default; }
-      button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-      select { font: inherit; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--border); background: #222733; color: var(--fg); }
-      .pill { padding: 3px 10px; border-radius: 999px; background: #222733; border: 1px solid var(--border); font-size: 12px; }
-      .pill.on { background: rgba(58, 210, 159, 0.15); border-color: var(--green); color: var(--green); }
-      .pill.warn { background: rgba(245, 166, 35, 0.15); border-color: var(--amber); color: var(--amber); }
-      .providers { margin-left: auto; display: flex; gap: 12px; align-items: center; }
-      .providers label { color: var(--muted); font-size: 12px; display: flex; gap: 6px; align-items: center; }
-      main { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 16px 24px; }
-      .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 14px; }
-      .panel h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0 0 10px; }
-      #transcript { height: 210px; overflow: auto; }
-      #transcript .final { margin: 3px 0; }
-      #transcript .partial { color: var(--muted); font-style: italic; }
-      #chart { width: 100%; height: 210px; display: block; }
-      .full { grid-column: 1 / -1; }
-      #log { height: 150px; overflow: auto; font-family: ui-monospace, monospace; font-size: 12px; color: #9fe6c4; white-space: pre-wrap; }
-      .kv { display: flex; gap: 22px; flex-wrap: wrap; color: var(--muted); font-size: 13px; margin-bottom: 8px; }
-      .kv b { color: var(--fg); }
+      html, body { height: 100%; }
+      body {
+        margin: 0; font: 15px/1.5 system-ui, sans-serif; background: var(--bg); color: var(--fg);
+        display: flex; flex-direction: column; min-height: 100dvh;
+      }
+      .app { display: flex; flex-direction: column; flex: 1; width: 100%; max-width: 880px; margin: 0 auto; min-height: 0; }
 
-      /* Phones: stack the two panels, and let the provider row wrap instead of
-         overflowing off the right edge. */
-      @media (max-width: 720px) {
-        header { padding: 14px 16px; }
-        .bar { padding: 12px 16px; gap: 10px; }
-        main { grid-template-columns: 1fr; padding: 12px 16px; }
-        .providers { margin-left: 0; width: 100%; flex-wrap: wrap; gap: 8px; }
-        .providers label { flex: 1 1 100%; justify-content: space-between; }
-        .providers select { flex: 1; min-width: 0; }
+      header { padding: 14px 18px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--border); }
+      header h1 { font-size: 17px; margin: 0; }
+      header .sub { color: var(--muted); font-size: 12px; }
+      .chip {
+        margin-left: auto; padding: 5px 12px; border-radius: 999px; font-size: 12px; font-weight: 600;
+        background: #222733; border: 1px solid var(--border); white-space: nowrap;
+      }
+      .chip.on { background: rgba(58, 210, 159, 0.15); border-color: var(--green); color: var(--green); }
+      .chip.warn { background: rgba(245, 166, 35, 0.15); border-color: var(--amber); color: var(--amber); }
+      .chip.connecting { background: rgba(79, 140, 255, 0.15); border-color: var(--accent); color: var(--accent); }
+
+      .tabs { display: flex; gap: 4px; padding: 10px 14px 0; }
+      .tabs button {
+        flex: 1; font: inherit; font-size: 13px; padding: 9px; border: none; border-radius: 10px 10px 0 0;
+        background: transparent; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent;
+      }
+      .tabs button.active { color: var(--fg); border-bottom-color: var(--accent); }
+
+      main { flex: 1; min-height: 0; padding: 10px 14px; display: flex; }
+      .panel { display: none; flex: 1; min-height: 0; flex-direction: column; }
+      .panel.active { display: flex; }
+
+      #transcript { flex: 1; overflow: auto; padding: 4px; display: flex; flex-direction: column; }
+      .empty { margin: auto; color: var(--muted); font-size: 13px; text-align: center; padding: 24px; max-width: 280px; }
+      .msg { max-width: 82%; padding: 9px 13px; border-radius: 15px; margin: 5px 0; line-height: 1.4; word-wrap: break-word; white-space: pre-wrap; }
+      .msg.you { align-self: flex-end; background: var(--accent); color: #fff; border-bottom-right-radius: 5px; }
+      .msg.agent { align-self: flex-start; background: #222733; border: 1px solid var(--border); border-bottom-left-radius: 5px; }
+      .msg.partial { align-self: flex-end; background: transparent; border: 1px dashed var(--border); color: var(--muted); font-style: italic; }
+
+      .legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); margin: 4px 0 8px; flex-wrap: wrap; }
+      .legend i { font-style: normal; }
+      #chart { width: 100%; height: 220px; display: block; }
+      .chart-hint { color: var(--muted); font-size: 12px; margin-top: 6px; }
+
+      details.setup { border-top: 1px solid var(--border); }
+      details.setup > summary {
+        list-style: none; cursor: pointer; padding: 12px 18px; color: var(--muted);
+        font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em;
+      }
+      details.setup > summary::-webkit-details-marker { display: none; }
+      details.setup > summary::before { content: '▸ '; }
+      details.setup[open] > summary::before { content: '▾ '; }
+      .setup-body { padding: 0 18px 14px; }
+      .field { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
+      .field label { color: var(--muted); font-size: 12px; width: 42px; }
+      select { flex: 1; font: inherit; padding: 7px 8px; border-radius: 8px; border: 1px solid var(--border); background: #222733; color: var(--fg); }
+      .kv { display: flex; gap: 18px; flex-wrap: wrap; color: var(--muted); font-size: 12px; margin: 10px 0; }
+      .kv b { color: var(--fg); }
+      #log { height: 120px; overflow: auto; font-family: ui-monospace, monospace; font-size: 11px; color: #9fe6c4; white-space: pre-wrap; background: #0c0e12; border: 1px solid var(--border); border-radius: 8px; padding: 8px; }
+
+      .controls {
+        position: sticky; bottom: 0; display: flex; align-items: center; gap: 10px; padding: 12px 16px;
+        padding-bottom: max(12px, env(safe-area-inset-bottom)); background: var(--bg); border-top: 1px solid var(--border);
+      }
+      .controls button { font: inherit; border-radius: 12px; border: 1px solid var(--border); background: #222733; color: var(--fg); cursor: pointer; }
+      .controls .primary { flex: 1; padding: 14px; font-size: 16px; font-weight: 600; background: var(--accent); border-color: var(--accent); color: #fff; }
+      .controls .icon { width: 52px; height: 52px; font-size: 18px; display: flex; align-items: center; justify-content: center; flex: none; }
+      .controls button:disabled { opacity: 0.4; cursor: default; }
+
+      /* Desktop: show transcript + latency side by side, hide the tab switcher. */
+      @media (min-width: 880px) {
+        .tabs { display: none; }
+        main { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .panel { display: flex !important; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 12px; }
       }
     </style>
   </head>
   <body>
-    <header>
-      <h1>AI Voice SDK</h1>
-      <span class="sub">real-time voice over WebRTC · talk, pause, hear the agent · interrupt to barge in</span>
-    </header>
+    <div class="app">
+      <header>
+        <div>
+          <h1>AI Voice SDK</h1>
+          <div class="sub">real-time voice over WebRTC</div>
+        </div>
+        <span class="chip" id="status">idle</span>
+      </header>
 
-    <div class="bar">
-      <button id="connect" class="primary">Connect</button>
-      <span class="pill" id="conn">idle</span>
-      <span class="pill" id="sess">—</span>
-      <button id="mute" disabled>Mute</button>
-      <button id="interrupt" disabled>Interrupt</button>
-      <div class="providers">
-        <label>ASR <select id="asr"><option>Deepgram</option><option>Whisper</option></select></label>
-        <label>LLM <select id="llm"><option>Claude</option><option>GPT</option><option>Gemini</option></select></label>
-        <label>TTS <select id="tts"><option>Cartesia</option><option>ElevenLabs</option></select></label>
+      <div class="tabs">
+        <button data-tab="transcript" class="active">Transcript</button>
+        <button data-tab="latency">Latency</button>
+      </div>
+
+      <main>
+        <section class="panel active" id="panel-transcript">
+          <div id="transcript">
+            <div class="empty">Tap <b>Connect</b>, allow the mic, and start talking — your words and the agent's reply show up here.</div>
+          </div>
+        </section>
+        <section class="panel" id="panel-latency">
+          <div class="legend">
+            <i><span style="color: #4f8cff">■</span> LLM first token</i>
+            <i><span style="color: #a06bff">■</span> LLM generate</i>
+            <i><span style="color: #3ad29f">■</span> TTS</i>
+          </div>
+          <canvas id="chart" width="640" height="220"></canvas>
+          <div class="chart-hint">Per-turn latency, endpoint → first audio. Dashed line = 1.1s budget.</div>
+        </section>
+      </main>
+
+      <details class="setup">
+        <summary>Setup &amp; debug</summary>
+        <div class="setup-body">
+          <div class="field"><label>ASR</label><select id="asr"><option>Deepgram</option><option>Whisper</option></select></div>
+          <div class="field"><label>LLM</label><select id="llm"><option>Claude</option><option>GPT</option><option>Gemini</option></select></div>
+          <div class="field"><label>TTS</label><select id="tts"><option>Cartesia</option><option>ElevenLabs</option></select></div>
+          <div class="kv">
+            <span>conn: <b id="d-conn">idle</b></span>
+            <span>session: <b id="d-sess">—</b></span>
+            <span>turns: <b id="d-turns">0</b></span>
+          </div>
+          <div class="kv"><span>providers: <b id="d-prov">Deepgram · Claude · Cartesia</b></span></div>
+          <div id="log"></div>
+          <div class="chart-hint">Provider dropdowns are illustrative — the live stack is chosen on the server by which API keys are set.</div>
+        </div>
+      </details>
+
+      <div class="controls">
+        <button id="mute" class="icon" disabled title="Mute">🎙</button>
+        <button id="connect" class="primary">Connect</button>
+        <button id="interrupt" class="icon" disabled title="Interrupt">✋</button>
       </div>
     </div>
-
-    <main>
-      <section class="panel">
-        <h2>Transcript</h2>
-        <div id="transcript"></div>
-      </section>
-      <section class="panel">
-        <h2>Turn latency · endpoint → audio (stacked)</h2>
-        <div style="display: flex; gap: 14px; font-size: 12px; color: var(--muted); margin-bottom: 6px">
-          <span><span style="color: #4f8cff">■</span> LLM first token</span>
-          <span><span style="color: #a06bff">■</span> LLM generate</span>
-          <span><span style="color: #3ad29f">■</span> TTS</span>
-        </div>
-        <canvas id="chart" width="640" height="200"></canvas>
-      </section>
-      <section class="panel full">
-        <h2>Debug</h2>
-        <div class="kv">
-          <span>connection: <b id="d-conn">idle</b></span>
-          <span>session: <b id="d-sess">—</b></span>
-          <span>providers: <b id="d-prov">Deepgram · Claude · Cartesia</b></span>
-          <span>turns: <b id="d-turns">0</b></span>
-        </div>
-        <div id="log"></div>
-      </section>
-    </main>
-
-    <p class="sub" style="padding: 0 24px 24px">
-      Each provider runs real when its key is set in <code>apps/server/.env</code>, else falls back
-      to a fake (tone + canned transcript). The provider dropdowns are illustrative — live switching
-      is future work.
-    </p>
 
     <audio id="remote" autoplay></audio>
     <script src="/client.js"></script>

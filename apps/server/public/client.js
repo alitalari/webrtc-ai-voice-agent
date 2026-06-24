@@ -1,9 +1,10 @@
 // Demo harness for the AI Voice SDK. Plain browser JS, served static (no build).
-// Later replaced by the real @voice/web-sdk VoiceSession.
+// Mobile-first: chat-bubble transcript, tabbed transcript/latency, sticky controls.
 
 const $ = (id) => document.getElementById(id);
 const log = (msg) => {
   const el = $('log');
+  if (!el) return;
   el.textContent += msg + '\n';
   el.scrollTop = el.scrollHeight;
 };
@@ -18,53 +19,64 @@ let turns = 0;
 let partialEl = null;
 let agentEl = null;
 let muted = false;
+let connState = 'idle';
+let sessState = '—';
 
-const sendEvent = (payload) => control.send(JSON.stringify({ kind: 'event', payload }));
+const sendEvent = (payload) => control && control.send(JSON.stringify({ kind: 'event', payload }));
 const sendConfig = (payload) => control && control.send(JSON.stringify({ kind: 'config', payload }));
 
-function setConn(state) {
-  $('conn').textContent = state;
-  $('d-conn').textContent = state;
-  $('conn').className = 'pill' + (state === 'connected' ? ' on' : '');
+// --- status chip (combines connection + session state) ---
+function renderStatus() {
+  const chip = $('status');
+  let text = connState;
+  let cls = '';
+  if (connState === 'connected') {
+    if (sessState === 'speaking') { text = 'speaking'; cls = 'warn'; }
+    else if (sessState === 'listening') { text = 'listening'; cls = 'on'; }
+    else { text = 'connected'; cls = 'on'; }
+  } else if (connState === 'connecting…' || connState === 'connecting') {
+    cls = 'connecting';
+  }
+  chip.textContent = text;
+  chip.className = 'chip' + (cls ? ' ' + cls : '');
 }
-
-function setSession(state) {
-  $('sess').textContent = state;
-  $('d-sess').textContent = state;
-  $('sess').className = 'pill' + (state === 'speaking' ? ' warn' : state === 'listening' ? ' on' : '');
-}
+function setConn(state) { connState = state; $('d-conn').textContent = state; renderStatus(); }
+function setSession(state) { sessState = state; $('d-sess').textContent = state; renderStatus(); }
 
 function setConnectedUi(on) {
   $('connect').textContent = on ? 'Disconnect' : 'Connect';
   $('connect').disabled = false;
   $('interrupt').disabled = !on;
   $('mute').disabled = !on;
-  if (!on) {
-    muted = false;
-    $('mute').textContent = 'Mute';
-  }
+  if (!on) { muted = false; $('mute').textContent = '🎙'; }
 }
 
-// --- transcript ---
+// --- transcript (chat bubbles) ---
+function clearTranscript() {
+  $('transcript').innerHTML = '';
+  partialEl = null;
+  agentEl = null;
+}
+function bubble(cls, text) {
+  const el = document.createElement('div');
+  el.className = 'msg ' + cls;
+  el.textContent = text;
+  $('transcript').appendChild(el);
+  $('transcript').scrollTop = $('transcript').scrollHeight;
+  return el;
+}
 function showPartial(text) {
-  if (!partialEl) {
-    partialEl = document.createElement('div');
-    partialEl.className = 'partial';
-    $('transcript').appendChild(partialEl);
-  }
-  partialEl.textContent = '… ' + text;
+  if (!partialEl) partialEl = bubble('partial', '');
+  partialEl.textContent = text;
   $('transcript').scrollTop = $('transcript').scrollHeight;
 }
-function commitLine(who, text, color) {
-  if (who === 'you' && partialEl) {
-    partialEl.remove();
-    partialEl = null;
-  }
-  const el = document.createElement('div');
-  el.className = 'final';
-  el.innerHTML = `<b style="color:${color}">${who}:</b> `;
-  el.appendChild(document.createTextNode(text));
-  $('transcript').appendChild(el);
+function commitYou(text) {
+  if (partialEl) { partialEl.remove(); partialEl = null; }
+  bubble('you', text);
+}
+function appendAgent(text) {
+  if (!agentEl) agentEl = bubble('agent', '');
+  agentEl.textContent += (agentEl.textContent ? ' ' : '') + text;
   $('transcript').scrollTop = $('transcript').scrollHeight;
 }
 
@@ -80,7 +92,6 @@ function drawChart() {
   const yFor = (ms) => H - (ms / maxMs) * H;
   const axisX = 30;
 
-  // gridlines + labels every 0.5s
   ctx.font = '10px system-ui';
   for (let g = 500; g <= maxMs; g += 500) {
     const y = yFor(g);
@@ -93,8 +104,7 @@ function drawChart() {
     ctx.fillText(g / 1000 + 's', 3, y + 3);
   }
 
-  // budget line at 1.1s
-  const by = yFor(1100);
+  const by = yFor(1100); // budget line at 1.1s
   ctx.strokeStyle = '#f5a623';
   ctx.setLineDash([4, 4]);
   ctx.beginPath();
@@ -128,6 +138,16 @@ function drawChart() {
     ctx.fillText(Math.round(total), x, y - 4);
   });
 }
+// Size the canvas backing store to its rendered width (it's hidden on the
+// inactive mobile tab, so guard against a zero width).
+function resizeChart() {
+  const c = $('chart');
+  const w = c.clientWidth;
+  if (!w) return;
+  c.width = w;
+  c.height = 220;
+  drawChart();
+}
 
 // --- server events ---
 function onServerEvent(e) {
@@ -140,24 +160,16 @@ function onServerEvent(e) {
       showPartial(e.text);
       break;
     case 'transcript.final':
-      commitLine('you', e.text, '#4f8cff');
+      commitYou(e.text);
       break;
     case 'agent.response.text':
-      // Sentences stream in; append them to one agent line for the turn.
-      if (!agentEl) {
-        agentEl = document.createElement('div');
-        agentEl.className = 'final';
-        agentEl.innerHTML = '<b style="color:#3ad29f">agent:</b> ';
-        $('transcript').appendChild(agentEl);
-      }
-      agentEl.appendChild(document.createTextNode(e.text + ' '));
-      $('transcript').scrollTop = $('transcript').scrollHeight;
+      appendAgent(e.text);
       break;
     case 'agent.response.started':
       setSession('speaking');
       break;
     case 'agent.response.completed':
-      agentEl = null; // next turn starts a fresh agent line
+      agentEl = null; // next turn starts a fresh agent bubble
       setSession('listening');
       break;
     case 'agent.interrupted':
@@ -178,6 +190,10 @@ function onServerEvent(e) {
 
 // --- connection ---
 async function connect() {
+  clearTranscript();
+  turnBars.length = 0;
+  turns = 0;
+  $('d-turns').textContent = '0';
   setConn('connecting…');
   $('connect').disabled = true;
 
@@ -266,7 +282,8 @@ $('mute').onclick = () => {
   if (!localStream) return;
   muted = !muted;
   for (const t of localStream.getAudioTracks()) t.enabled = !muted; // muted track sends silence
-  $('mute').textContent = muted ? 'Unmute' : 'Mute';
+  $('mute').textContent = muted ? '🔇' : '🎙';
+  $('mute').title = muted ? 'Unmute' : 'Mute';
   log(muted ? 'muted' : 'unmuted');
 };
 
@@ -277,4 +294,16 @@ for (const id of ['asr', 'llm', 'tts']) {
   };
 }
 
-drawChart();
+// tabs (mobile only — on desktop both panels show and the tab bar is hidden)
+document.querySelectorAll('.tabs button').forEach((b) => {
+  b.onclick = () => {
+    document.querySelectorAll('.tabs button').forEach((x) => x.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach((p) => p.classList.remove('active'));
+    b.classList.add('active');
+    $('panel-' + b.dataset.tab).classList.add('active');
+    if (b.dataset.tab === 'latency') resizeChart();
+  };
+});
+
+window.addEventListener('resize', resizeChart);
+resizeChart();
