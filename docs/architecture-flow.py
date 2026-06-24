@@ -51,7 +51,7 @@ def arrow(x1, y1, x2, y2, color="#444", width=3):
 # --- title ---
 label(W / 2, 38, "AI Voice SDK — End-to-End Flow", 34, "#111", True)
 label(W / 2, 76,
-      "current state  ·  Phases 0–2 complete  ·  WebRTC media-path milestone 1 (fake providers, audio echo)",
+      "live, end-to-end over WebRTC  ·  real providers (Deepgram ASR · Claude LLM · Cartesia TTS)  ·  own VAD / turn-taking / barge-in",
       16, "#666")
 
 BLUE, GREEN = "#3b6ea5", "#3a7d44"
@@ -65,7 +65,7 @@ label(1450, 138, "SERVER  —  reference backend", 21, "#2c6135", True)
 # --- browser boxes ---
 box(80, 190, 460, 70, "Mic capture", "getUserMedia({ audio: true })", BLUE)
 box(80, 282, 460, 86, "RTCPeerConnection", "• addTrack(mic)\n• createDataChannel('control')", BLUE)
-box(80, 392, 460, 70, "Audio playback", "<audio>  ←  echoed mic (milestone 1)", BLUE)
+box(80, 392, 460, 70, "Audio playback", "<audio>  ←  agent voice  (Opus, 48 kHz)", BLUE)
 box(80, 484, 460, 70, "Event log", "renders ServerEvents from the data channel", BLUE)
 
 # --- server boxes ---
@@ -73,7 +73,7 @@ box(1220, 190, 460, 70, "HTTP signaling", "POST /session   ·   offer → answer
 box(1220, 282, 460, 86, "werift peer + WeriftServerTransport", "ICE · DTLS · SRTP audio · SCTP data channel", GREEN)
 box(1220, 392, 460, 86, "SessionOrchestrator", "cascade ASR → LLM → TTS\nbarge-in cancellation · latency metrics", GREEN)
 box(1220, 502, 460, 86, "Endpointer + State machine", "VAD → turn events\nidle→listening→userSpeaking→thinking→speaking", GREEN)
-box(1220, 612, 460, 86, "Providers (fake, swappable)", "ASR · LLM · TTS\n→ Deepgram / Claude / Cartesia (Phase 3)", GREEN)
+box(1220, 612, 460, 86, "Providers (swappable)", "Deepgram ASR · Claude LLM · Cartesia TTS\nfake fallback when no API key is set", GREEN)
 
 # --- connection bands (the gap between panels) ---
 GX1, GX2 = 570, 1190
@@ -88,7 +88,7 @@ label(880, 392, "2 · WebRTC audio track — UDP · SRTP (DTLS) · ICE host cand
 arrow(GX1, 420, GX2, 420)
 label(880, 410, "mic: Opus → SRTP", 13, "#777", anchor="mm")
 arrow(GX2, 446, GX1, 446)
-label(880, 436, "echo back", 13, "#777", anchor="mm")
+label(880, 436, "agent: TTS PCM → Opus → SRTP", 13, "#777", anchor="mm")
 
 label(880, 520, "3 · WebRTC data channel — SCTP over DTLS  (ordered, reliable)", 15, "#444", True)
 arrow(GX1, 548, GX2, 548)
@@ -105,7 +105,7 @@ d.rounded_rectangle([50, 812, 1710, 1140], radius=16, fill="#f7f7f5", outline="#
 label(880, 842, "A TURN, END-TO-END", 19, "#333", True)
 
 steps = [
-    ("You speak", "mic audio streams to the\nserver (and echoes back\nso you hear yourself)"),
+    ("You speak", "mic audio (Opus) streams\ncontinuously to the\nserver over SRTP"),
     ("VAD → endpoint", "Endpointer sees speech\nthen silence → emits\n'endpointed'"),
     ("State machine", "listening → userSpeaking\n→ thinking on endpoint"),
     ("Cascade runs", "ASR final → LLM stream\n→ TTS stream → audio"),
