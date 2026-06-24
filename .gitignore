@@ -7,3 +7,6 @@ coverage/
 !.env.example
 .DS_Store
 *.log
+
+# Local secrets (demo credentials, etc.) — never commit
+*.local.md
