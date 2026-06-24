@@ -7,7 +7,7 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/alitalari/rtc_sdk.git"
+    "url": "https://github.com/alitalari/webrtc-ai-voice-agent.git"
   },
   "engines": {
     "node": ">=20"

@@ -18,7 +18,7 @@ A from-scratch, **real-time AI voice agent** over WebRTC — talk to it, it talk
 - **Tested and deployed.** 70 unit/integration tests; running live behind TLS on a single small VPS.
 
 ```bash
-git clone https://github.com/alitalari/rtc_sdk.git && cd rtc_sdk
+git clone https://github.com/alitalari/webrtc-ai-voice-agent.git && cd webrtc-ai-voice-agent
 npm install && npm run build
 npm start -w @voice/server          # → open http://localhost:8080 and talk
 ```
@@ -34,8 +34,8 @@ No API keys required for that — it boots on fake providers (a tone + canned tr
 
 ```bash
 # 1. Clone
-git clone https://github.com/alitalari/rtc_sdk.git
-cd rtc_sdk
+git clone https://github.com/alitalari/webrtc-ai-voice-agent.git
+cd webrtc-ai-voice-agent
 
 # 2. Install (npm workspaces) and build (tsc -b across all packages)
 npm install
