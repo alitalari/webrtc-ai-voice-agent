@@ -88,12 +88,23 @@ function drawChart() {
   const H = c.height;
   ctx.clearRect(0, 0, W, H);
 
-  const maxMs = 2000; // y-axis to 2s
-  const yFor = (ms) => H - (ms / maxMs) * H;
   const axisX = 30;
+  const bw = 34;
+  const gap = 10;
+  const x0 = axisX + 8;
+  const visible = turnBars.slice(-Math.floor((W - x0) / (bw + gap)));
+
+  // Auto-scale the y-axis: default 2s, but grow (with ~10% headroom, rounded to
+  // 0.5s) when a turn is taller — so a slow provider (e.g. OpenAI TTS) doesn't
+  // clip off the top of the chart.
+  const totals = visible.map((t) => (t.ttft || 0) + (t.gen || 0) + (t.tts || 0));
+  const rawPeak = Math.max(0, ...totals);
+  const maxMs = Math.max(2000, Math.ceil((rawPeak * 1.1) / 500) * 500);
+  const yFor = (ms) => H - (ms / maxMs) * H;
+  const gridStep = maxMs > 4000 ? 1000 : 500;
 
   ctx.font = '10px system-ui';
-  for (let g = 500; g <= maxMs; g += 500) {
+  for (let g = gridStep; g <= maxMs; g += gridStep) {
     const y = yFor(g);
     ctx.strokeStyle = '#2a2f3a';
     ctx.beginPath();
@@ -119,10 +130,6 @@ function drawChart() {
     ['gen', '#a06bff'],
     ['tts', '#3ad29f'],
   ];
-  const bw = 34;
-  const gap = 10;
-  const x0 = axisX + 8;
-  const visible = turnBars.slice(-Math.floor((W - x0) / (bw + gap)));
   visible.forEach((t, i) => {
     const x = x0 + i * (bw + gap);
     let y = H;
