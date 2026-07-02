@@ -10,6 +10,7 @@ export interface OpenAITTSAdapterOptions {
   apiKey: string;
   model?: string;
   voice?: string;
+  speed?: number;
 }
 
 const delay = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
@@ -25,13 +26,15 @@ export class OpenAITTSAdapter implements TTSAdapter {
   private readonly client: OpenAI;
   private readonly model: string;
   private readonly voice: string;
+  private readonly speed: number;
   private controller: AbortController | undefined;
   private cancelled = false;
 
   constructor(options: OpenAITTSAdapterOptions) {
     this.client = new OpenAI({ apiKey: options.apiKey });
-    this.model = options.model ?? 'gpt-4o-mini-tts';
+    this.model = options.model ?? 'tts-1'; // faster pace + lower TTFB than gpt-4o-mini-tts
     this.voice = options.voice ?? 'alloy';
+    this.speed = options.speed ?? 1.0;
   }
 
   async *synthesizeStream(input: TTSInput): AsyncIterable<AudioChunk> {
@@ -47,7 +50,14 @@ export class OpenAITTSAdapter implements TTSAdapter {
     void (async () => {
       try {
         const resp = await this.client.audio.speech.create(
-          { model: this.model, voice: this.voice, input: input.text, response_format: 'pcm' },
+          {
+            model: this.model,
+            voice: this.voice,
+            input: input.text,
+            response_format: 'pcm',
+            // `speed` is honored by tts-1 / tts-1-hd (gpt-4o-mini-tts ignores it).
+            ...(this.model.startsWith('tts-') ? { speed: this.speed } : {}),
+          },
           { signal: controller.signal },
         );
         if (!resp.body) return;

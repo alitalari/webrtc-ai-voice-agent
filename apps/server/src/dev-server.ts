@@ -99,6 +99,7 @@ function makeTts(choice: string): TTSAdapter {
           apiKey: config.openaiApiKey,
           model: config.openaiTtsModel,
           voice: config.openaiTtsVoice,
+          speed: config.openaiTtsSpeed,
         });
       break;
     case 'cartesia':
