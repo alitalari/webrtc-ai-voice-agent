@@ -12,6 +12,8 @@ export interface ServerConfig {
   openaiApiKey?: string;
   openaiModel: string;
   openaiTranscribeModel: string;
+  openaiTtsModel: string;
+  openaiTtsVoice: string;
   // Google Gemini (LLM).
   geminiApiKey?: string;
   geminiModel: string;
@@ -53,6 +55,8 @@ export function loadConfig(): ServerConfig {
     openaiApiKey: process.env.OPENAI_API_KEY,
     openaiModel: process.env.OPENAI_MODEL ?? 'gpt-4o-mini',
     openaiTranscribeModel: process.env.OPENAI_TRANSCRIBE_MODEL ?? 'gpt-4o-mini-transcribe',
+    openaiTtsModel: process.env.OPENAI_TTS_MODEL ?? 'gpt-4o-mini-tts',
+    openaiTtsVoice: process.env.OPENAI_TTS_VOICE ?? 'alloy',
     geminiApiKey: process.env.GEMINI_API_KEY,
     geminiModel: process.env.GEMINI_MODEL ?? 'gemini-2.5-flash',
     elevenlabsApiKey: process.env.ELEVENLABS_API_KEY,

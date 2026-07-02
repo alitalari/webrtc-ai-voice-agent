@@ -15,6 +15,7 @@ import { GeminiModelAdapter } from './providers/gemini.js';
 import { OpenAITranscribeASRAdapter } from './providers/openai-asr.js';
 import { ElevenLabsScribeASRAdapter } from './providers/elevenlabs-asr.js';
 import { ElevenLabsTTSAdapter } from './providers/elevenlabs-tts.js';
+import { OpenAITTSAdapter } from './providers/openai-tts.js';
 import type { ASRAdapter, ModelAdapter, TTSAdapter } from '@voice/provider-interfaces';
 
 const config = loadConfig();
@@ -90,6 +91,14 @@ function makeTts(choice: string): TTSAdapter {
           apiKey: config.elevenlabsApiKey,
           voiceId: config.elevenlabsVoiceId,
           model: config.elevenlabsTtsModel,
+        });
+      break;
+    case 'openai':
+      if (config.openaiApiKey)
+        return new OpenAITTSAdapter({
+          apiKey: config.openaiApiKey,
+          model: config.openaiTtsModel,
+          voice: config.openaiTtsVoice,
         });
       break;
     case 'cartesia':
@@ -186,6 +195,7 @@ export function startDevServer(): void {
                 tts: [
                   config.cartesiaApiKey ? 'cartesia' : null,
                   config.elevenlabsApiKey ? 'elevenlabs' : null,
+                  config.openaiApiKey ? 'openai' : null,
                 ].filter(Boolean),
               },
               uptimeSec: Math.round(process.uptime()),
@@ -216,6 +226,8 @@ export function startDevServer(): void {
     console.log(
       `LLM: ${list([[!!config.anthropicApiKey, 'claude'], [!!config.openaiApiKey, 'gpt'], [!!config.geminiApiKey, 'gemini']])}`,
     );
-    console.log(`TTS: ${list([[!!config.cartesiaApiKey, 'cartesia'], [!!config.elevenlabsApiKey, 'elevenlabs']])}`);
+    console.log(
+      `TTS: ${list([[!!config.cartesiaApiKey, 'cartesia'], [!!config.elevenlabsApiKey, 'elevenlabs'], [!!config.openaiApiKey, 'openai']])}`,
+    );
   });
 }
