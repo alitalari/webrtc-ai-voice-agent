@@ -74,8 +74,9 @@
         main { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-content: start; align-items: start; }
         .panel { display: flex !important; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 12px; }
         #panel-debug { grid-column: 1 / -1; } /* full-width row under transcript + latency */
-        /* Cap the transcript so it scrolls internally instead of growing the page. */
-        #transcript { max-height: 60vh; }
+        /* Definite height so the transcript scrolls inside its own card instead
+           of growing down under the panel below it. */
+        #panel-transcript { height: 62vh; }
       }
     </style>
   </head>

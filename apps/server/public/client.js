@@ -344,5 +344,14 @@ document.querySelectorAll('.tabs button').forEach((b) => {
   };
 });
 
+// Backgrounding the tab can buffer/flush mic audio and re-trigger the last turn
+// on return. Mute the mic while the page is hidden; restore on return (honoring
+// the user's manual mute).
+document.addEventListener('visibilitychange', () => {
+  if (!localStream) return;
+  const on = !document.hidden && !muted;
+  for (const t of localStream.getAudioTracks()) t.enabled = on;
+});
+
 window.addEventListener('resize', resizeChart);
 resizeChart();
