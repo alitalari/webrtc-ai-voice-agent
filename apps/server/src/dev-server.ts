@@ -10,6 +10,12 @@ import { loadConfig } from './config.js';
 import { ClaudeModelAdapter } from './providers/claude.js';
 import { DeepgramASRAdapter } from './providers/deepgram.js';
 import { CartesiaTTSAdapter } from './providers/cartesia.js';
+import { OpenAIModelAdapter } from './providers/openai-llm.js';
+import { GeminiModelAdapter } from './providers/gemini.js';
+import { OpenAITranscribeASRAdapter } from './providers/openai-asr.js';
+import { ElevenLabsScribeASRAdapter } from './providers/elevenlabs-asr.js';
+import { ElevenLabsTTSAdapter } from './providers/elevenlabs-tts.js';
+import type { ASRAdapter, ModelAdapter, TTSAdapter } from '@voice/provider-interfaces';
 
 const config = loadConfig();
 
@@ -35,40 +41,96 @@ function readBody(req: IncomingMessage): Promise<string> {
   });
 }
 
+// --- Per-session provider selection ---
+// The demo's dropdowns pick a provider per session (sent in the POST /session
+// body). A stage goes "real" only if the chosen provider's key is set; else it
+// falls back to the fake, so the demo always runs.
+function makeAsr(choice: string): ASRAdapter {
+  switch (choice) {
+    case 'openai':
+      if (config.openaiApiKey)
+        return new OpenAITranscribeASRAdapter({ apiKey: config.openaiApiKey, model: config.openaiTranscribeModel });
+      break;
+    case 'elevenlabs':
+      if (config.elevenlabsApiKey)
+        return new ElevenLabsScribeASRAdapter({ apiKey: config.elevenlabsApiKey, model: config.elevenlabsSttModel });
+      break;
+    case 'deepgram':
+    default:
+      if (config.deepgramApiKey) return new DeepgramASRAdapter({ apiKey: config.deepgramApiKey });
+  }
+  console.log(`[providers] ASR '${choice}' unavailable (no key) — using fake`);
+  return new FakeASRAdapter({ repeat: true, partialAfter: 8, finalAfter: 26 });
+}
+
+function makeModel(choice: string): ModelAdapter {
+  switch (choice) {
+    case 'gpt':
+      if (config.openaiApiKey)
+        return new OpenAIModelAdapter({ apiKey: config.openaiApiKey, model: config.openaiModel });
+      break;
+    case 'gemini':
+      if (config.geminiApiKey)
+        return new GeminiModelAdapter({ apiKey: config.geminiApiKey, model: config.geminiModel });
+      break;
+    case 'claude':
+    default:
+      if (config.anthropicApiKey)
+        return new ClaudeModelAdapter({ apiKey: config.anthropicApiKey, model: config.anthropicModel });
+  }
+  console.log(`[providers] LLM '${choice}' unavailable (no key) — using fake`);
+  return new FakeModelAdapter({ sleep: (i) => delay(i === 0 ? 300 : 20) });
+}
+
+function makeTts(choice: string): TTSAdapter {
+  switch (choice) {
+    case 'elevenlabs':
+      if (config.elevenlabsApiKey)
+        return new ElevenLabsTTSAdapter({
+          apiKey: config.elevenlabsApiKey,
+          voiceId: config.elevenlabsVoiceId,
+          model: config.elevenlabsTtsModel,
+        });
+      break;
+    case 'cartesia':
+    default:
+      if (config.cartesiaApiKey)
+        return new CartesiaTTSAdapter({ apiKey: config.cartesiaApiKey, voiceId: config.cartesiaVoiceId });
+  }
+  console.log(`[providers] TTS '${choice}' unavailable (no key) — using fake`);
+  return new FakeTTSAdapter({
+    sampleRate: 48000,
+    chunkCount: 50,
+    sleep: (i) => delay(i === 0 ? 120 : 20), // ~120ms to first audio byte
+  });
+}
+
 async function handleSession(req: IncomingMessage, res: ServerResponse): Promise<void> {
-  const { offer } = JSON.parse(await readBody(req)) as { offer: string };
+  const body = JSON.parse(await readBody(req)) as {
+    offer: string;
+    providers?: { asr?: string; llm?: string; tts?: string };
+  };
+  const asrChoice = (body.providers?.asr ?? 'deepgram').toLowerCase();
+  const llmChoice = (body.providers?.llm ?? 'claude').toLowerCase();
+  const ttsChoice = (body.providers?.tts ?? 'cartesia').toLowerCase();
   const sessionId = `s-${++sessionCounter}`;
 
-  const { answerSdp, transport } = await createWeriftSession(offer, {
+  const { answerSdp, transport } = await createWeriftSession(body.offer, {
     vadThreshold: config.vadThreshold,
     publicIp: config.publicIp,
     icePortRange: config.icePortRange,
   });
 
-  const model = config.anthropicApiKey
-    ? new ClaudeModelAdapter({ apiKey: config.anthropicApiKey, model: config.anthropicModel })
-    : new FakeModelAdapter({ sleep: (i) => delay(i === 0 ? 300 : 20) });
-  if (model instanceof ClaudeModelAdapter) void model.warmup(); // warm the connection
-  // Dev wiring: fake providers, given *realistic* latency so the demo's timing
-  // and latency chart feel like a real voice agent (real providers swap in at
-  // Phase 3). Real server-side VAD drives turns; fake TTS is a ~1s 48kHz tone
-  // paced at 20ms/frame.
+  const asr = makeAsr(asrChoice);
+  const model = makeModel(llmChoice);
+  const tts = makeTts(ttsChoice);
+  if (model instanceof ClaudeModelAdapter || model instanceof OpenAIModelAdapter) void model.warmup();
+  console.log(`[providers] session ${sessionId}: asr=${asrChoice} · llm=${llmChoice} · tts=${ttsChoice}`);
+
   createSession({
     sessionId,
     transport,
-    adapters: {
-      asr: config.deepgramApiKey
-        ? new DeepgramASRAdapter({ apiKey: config.deepgramApiKey })
-        : new FakeASRAdapter({ repeat: true, partialAfter: 8, finalAfter: 26 }),
-      model,
-      tts: config.cartesiaApiKey
-        ? new CartesiaTTSAdapter({ apiKey: config.cartesiaApiKey, voiceId: config.cartesiaVoiceId })
-        : new FakeTTSAdapter({
-            sampleRate: 48000,
-            chunkCount: 50,
-            sleep: (i) => delay(i === 0 ? 120 : 20), // ~120ms to first audio byte
-          }),
-    },
+    adapters: { asr, model, tts },
     // speechOnsetMs: require sustained speech to open a turn (filters brief noise).
     endpointer: { silenceThresholdMs: 600, speechOnsetMs: 150 },
     onTiming: (t) => {
@@ -111,9 +173,20 @@ export function startDevServer(): void {
               status: 'ok',
               protocol: PROTOCOL_VERSION,
               providers: {
-                asr: config.deepgramApiKey ? 'deepgram' : 'fake',
-                llm: config.anthropicApiKey ? config.anthropicModel : 'fake',
-                tts: config.cartesiaApiKey ? 'cartesia' : 'fake',
+                asr: [
+                  config.deepgramApiKey ? 'deepgram' : null,
+                  config.openaiApiKey ? 'openai' : null,
+                  config.elevenlabsApiKey ? 'elevenlabs' : null,
+                ].filter(Boolean),
+                llm: [
+                  config.anthropicApiKey ? 'claude' : null,
+                  config.openaiApiKey ? 'gpt' : null,
+                  config.geminiApiKey ? 'gemini' : null,
+                ].filter(Boolean),
+                tts: [
+                  config.cartesiaApiKey ? 'cartesia' : null,
+                  config.elevenlabsApiKey ? 'elevenlabs' : null,
+                ].filter(Boolean),
               },
               uptimeSec: Math.round(process.uptime()),
             }),
@@ -131,10 +204,18 @@ export function startDevServer(): void {
   });
 
   server.listen(config.port, () => {
-    const asr = config.deepgramApiKey ? 'Deepgram' : 'fake';
-    const llm = config.anthropicApiKey ? `Claude (${config.anthropicModel})` : 'fake';
-    const tts = config.cartesiaApiKey ? 'Cartesia' : 'fake';
+    const list = (opts: Array<[boolean, string]>): string =>
+      opts
+        .filter(([has]) => has)
+        .map(([, name]) => name)
+        .join(', ') || 'fake only';
     console.log(`@voice/server dev server on http://localhost:${config.port} (protocol v${PROTOCOL_VERSION})`);
-    console.log(`providers — ASR: ${asr} · LLM: ${llm} · TTS: ${tts}`);
+    console.log(
+      `ASR: ${list([[!!config.deepgramApiKey, 'deepgram'], [!!config.openaiApiKey, 'openai'], [!!config.elevenlabsApiKey, 'elevenlabs']])}`,
+    );
+    console.log(
+      `LLM: ${list([[!!config.anthropicApiKey, 'claude'], [!!config.openaiApiKey, 'gpt'], [!!config.geminiApiKey, 'gemini']])}`,
+    );
+    console.log(`TTS: ${list([[!!config.cartesiaApiKey, 'cartesia'], [!!config.elevenlabsApiKey, 'elevenlabs']])}`);
   });
 }

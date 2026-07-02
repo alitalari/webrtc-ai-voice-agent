@@ -71,9 +71,11 @@
       /* Desktop: show transcript + latency side by side, hide the tab switcher. */
       @media (min-width: 880px) {
         .tabs { display: none; }
-        main { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-content: start; }
+        main { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-content: start; align-items: start; }
         .panel { display: flex !important; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 12px; }
         #panel-debug { grid-column: 1 / -1; } /* full-width row under transcript + latency */
+        /* Cap the transcript so it scrolls internally instead of growing the page. */
+        #transcript { max-height: 60vh; }
       }
     </style>
   </head>
@@ -109,17 +111,17 @@
           <div class="chart-hint">Per-turn latency, endpoint → first audio. Dashed line = 1.1s budget.</div>
         </section>
         <section class="panel" id="panel-debug">
-          <div class="field"><label>ASR</label><select id="asr"><option>Deepgram</option><option>Whisper</option></select></div>
-          <div class="field"><label>LLM</label><select id="llm"><option>Claude</option><option>GPT</option><option>Gemini</option></select></div>
-          <div class="field"><label>TTS</label><select id="tts"><option>Cartesia</option><option>ElevenLabs</option></select></div>
+          <div class="field"><label>ASR</label><select id="asr"><option value="deepgram">Deepgram</option><option value="openai">OpenAI</option><option value="elevenlabs">ElevenLabs</option></select></div>
+          <div class="field"><label>LLM</label><select id="llm"><option value="claude">Claude</option><option value="gpt">GPT</option><option value="gemini">Gemini</option></select></div>
+          <div class="field"><label>TTS</label><select id="tts"><option value="cartesia">Cartesia</option><option value="elevenlabs">ElevenLabs</option></select></div>
           <div class="kv">
             <span>conn: <b id="d-conn">idle</b></span>
             <span>session: <b id="d-sess">—</b></span>
             <span>turns: <b id="d-turns">0</b></span>
           </div>
-          <div class="kv"><span>providers: <b id="d-prov">Deepgram · Claude · Cartesia</b></span></div>
+          <div class="kv"><span>providers: <b id="d-prov">deepgram · claude · cartesia</b></span></div>
           <div id="log"></div>
-          <div class="chart-hint">Provider dropdowns are illustrative — the live stack is chosen on the server by which API keys are set.</div>
+          <div class="chart-hint">Pick a provider per stage — applied on the next <b>Connect</b>. A stage needs its API key set on the server, otherwise it falls back to a fake.</div>
         </section>
       </main>
 

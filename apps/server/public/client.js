@@ -24,7 +24,6 @@ let sessState = '—';
 let tConnectStart = 0;
 
 const sendEvent = (payload) => control && control.send(JSON.stringify({ kind: 'event', payload }));
-const sendConfig = (payload) => control && control.send(JSON.stringify({ kind: 'config', payload }));
 
 // --- status chip (combines connection + session state) ---
 function renderStatus() {
@@ -234,11 +233,12 @@ async function connect() {
   await waitIceComplete(pc);
   log(`ice gathering: ${Math.round(performance.now() - tOffer)}ms`);
 
+  const providers = { asr: $('asr').value, llm: $('llm').value, tts: $('tts').value };
   const tFetch = performance.now();
   const resp = await fetch('/session', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ offer: pc.localDescription.sdp }),
+    body: JSON.stringify({ offer: pc.localDescription.sdp, providers }),
   });
   const { answer, sessionId: sid } = await resp.json();
   sessionId = sid;
@@ -306,10 +306,23 @@ $('mute').onclick = () => {
   log(muted ? 'muted' : 'unmuted');
 };
 
+// Changing a provider mid-call reconnects with the new choice (debounced, so
+// changing several at once coalesces into a single reconnect). While
+// disconnected, the choice is just staged for the next Connect.
+let switchTimer;
 for (const id of ['asr', 'llm', 'tts']) {
   $(id).onchange = () => {
     $('d-prov').textContent = `${$('asr').value} · ${$('llm').value} · ${$('tts').value}`;
-    sendConfig({ asr: $('asr').value, llm: $('llm').value, tts: $('tts').value });
+    if (!pc) return;
+    log('provider changed — reconnecting…');
+    clearTimeout(switchTimer);
+    switchTimer = setTimeout(() => {
+      disconnect();
+      connect().catch((e) => {
+        log('error: ' + e.message);
+        disconnect();
+      });
+    }, 400);
   };
 }
 

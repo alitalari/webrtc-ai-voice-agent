@@ -12,13 +12,19 @@
     "@anthropic-ai/sdk": "^0.105.0",
     "@cartesia/cartesia-js": "^3.2.0",
     "@deepgram/sdk": "^5.4.0",
+    "@google/genai": "^2.10.0",
     "@voice/fake-providers": "*",
     "@voice/media": "*",
     "@voice/orchestrator": "*",
     "@voice/protocol": "*",
     "@voice/provider-interfaces": "*",
     "@voice/session": "*",
+    "openai": "^6.45.0",
     "opusscript": "^0.1.1",
-    "werift": "^0.23.0"
+    "werift": "^0.23.0",
+    "ws": "^8.21.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.18.1"
   }
 }
