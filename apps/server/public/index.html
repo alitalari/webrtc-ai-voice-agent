@@ -68,16 +68,9 @@
       .controls .icon { width: 52px; height: 52px; font-size: 18px; display: flex; align-items: center; justify-content: center; flex: none; }
       .controls button:disabled { opacity: 0.4; cursor: default; }
 
-      /* Desktop: show transcript + latency side by side, hide the tab switcher. */
-      @media (min-width: 880px) {
-        .tabs { display: none; }
-        main { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-content: start; align-items: start; }
-        .panel { display: flex !important; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 12px; }
-        #panel-debug { grid-column: 1 / -1; } /* full-width row under transcript + latency */
-        /* Definite height so the transcript scrolls inside its own card instead
-           of growing down under the panel below it. */
-        #panel-transcript { height: 62vh; }
-      }
+      /* One layout at every width: the tabbed single-panel view (centered by
+         .app max-width on desktop). The transcript is bounded by the viewport
+         flex chain, so it scrolls in its panel instead of growing the page. */
     </style>
   </head>
   <body>
