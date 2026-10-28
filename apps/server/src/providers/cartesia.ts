@@ -37,7 +37,7 @@ export class CartesiaTTSAdapter implements TTSAdapter {
   constructor(options: CartesiaAdapterOptions) {
     this.apiKey = options.apiKey;
     this.voiceId = options.voiceId;
-    this.model = options.model ?? 'sonic-2';
+    this.model = options.model ?? 'sonic-3.6';
     this.version = options.version ?? '2024-11-13';
   }
 
